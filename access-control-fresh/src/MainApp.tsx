@@ -3,7 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, Pressable, StyleSheet, Alert } from "react-native";
-import { useWalletConnectModal } from "@walletconnect/modal-react-native";
+import { useWallet } from "./hooks/useWallet";
 import DevicesScreen from "./screens/DevicesScreen";
 import UnlockScreen from "./screens/UnlockScreen";
 
@@ -11,24 +11,19 @@ import UnlockScreen from "./screens/UnlockScreen";
 const Tab = createBottomTabNavigator();
 
 export const MainApp = () => {
-  const { open, isConnected, address, provider } = useWalletConnectModal();
+  const { isConnected, displayAddress, connect, disconnect } = useWallet();
 
   const getWalletName = () => {
-    // You can customize this based on the connected wallet type
-    // For now, we'll use a generic "wallet" or try to detect from provider
     return "wallet";
   };
 
   const handleWalletPress = async () => {
     if (isConnected) {
       const walletName = getWalletName();
-      const truncatedAddress = `${address?.slice(0, 6)}...${address?.slice(
-        -4
-      )}`;
 
       Alert.alert(
         "Disconnect Wallet",
-        `Are you sure you want to disconnect the ${truncatedAddress} ${walletName}?`,
+        `Are you sure you want to disconnect the ${displayAddress} ${walletName}?`,
         [
           {
             text: "Cancel",
@@ -38,22 +33,20 @@ export const MainApp = () => {
             text: "Disconnect",
             style: "destructive",
             onPress: () => {
-              provider?.disconnect();
+              disconnect();
             },
           },
         ]
       );
     } else {
-      return open();
+      connect();
     }
   };
 
   const WalletButton = () => (
     <Pressable style={styles.walletButton} onPress={handleWalletPress}>
       <Text style={styles.walletButtonText}>
-        {isConnected
-          ? `${address?.slice(0, 4)}...${address?.slice(-4)}`
-          : "Connect"}
+        {isConnected ? displayAddress : "Connect"}
       </Text>
     </Pressable>
   );
