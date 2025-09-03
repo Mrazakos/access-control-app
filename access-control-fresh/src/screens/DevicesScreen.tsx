@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useCustomAlert } from "../components/CustomAlert";
 
 interface Device {
   id: string;
@@ -21,13 +21,32 @@ export default function DevicesScreen() {
     { id: "1", name: "Front Door Lock", lockId: 1, status: "online" },
     { id: "2", name: "Back Door Lock", lockId: 2, status: "offline" },
   ]);
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const addDevice = () => {
-    Alert.alert(
-      "Add Device",
-      "This will register a new smart lock device on the blockchain"
-    );
-    // TODO: Implement device registration
+    showAlert({
+      title: "Add Device",
+      message: "This will register a new smart lock device on the blockchain",
+      icon: "add-circle",
+      iconColor: "#4285f4",
+      buttons: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add Device",
+          onPress: () => {
+            // TODO: Implement device registration
+            showAlert({
+              title: "Coming Soon",
+              message:
+                "Device registration will be implemented with smart contract integration.",
+              icon: "construct",
+              iconColor: "#fbbc04",
+              buttons: [{ text: "OK" }],
+            });
+          },
+        },
+      ],
+    });
   };
 
   const renderDevice = ({ item }: { item: Device }) => (
@@ -49,7 +68,7 @@ export default function DevicesScreen() {
         </View>
       </View>
       <TouchableOpacity style={styles.configButton}>
-        <Ionicons name="settings-outline" size={24} color="#2563eb" />
+        <Ionicons name="settings-outline" size={24} color="#4285f4" />
       </TouchableOpacity>
     </View>
   );
@@ -67,6 +86,8 @@ export default function DevicesScreen() {
         keyExtractor={(item) => item.id}
         style={styles.deviceList}
       />
+
+      <AlertComponent />
     </View>
   );
 }
@@ -74,67 +95,89 @@ export default function DevicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: "#f8fafc",
+    padding: 20,
+    backgroundColor: "#1f1f1f", // Google Dark Background
   },
   addButton: {
-    backgroundColor: "#2563eb",
+    backgroundColor: "#4285f4", // Google Blue
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 28,
+    marginBottom: 24,
+    shadowColor: "#4285f4",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
   addButtonText: {
-    color: "white",
-    fontWeight: "bold",
-    marginLeft: 8,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginLeft: 12,
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   deviceList: {
     flex: 1,
   },
   deviceCard: {
-    backgroundColor: "white",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: "#202124", // Google Dark Surface
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
     flexDirection: "row",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#3c4043",
   },
   deviceInfo: {
     flex: 1,
   },
   deviceName: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 4,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#ffffff",
+    letterSpacing: 0.3,
   },
   deviceId: {
     fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 8,
+    color: "#9aa0a6",
+    marginBottom: 12,
+    fontFamily: "monospace",
   },
   statusContainer: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#2d2f31",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    marginRight: 8,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 13,
     textTransform: "capitalize",
+    color: "#ffffff",
+    fontWeight: "500",
   },
   configButton: {
-    padding: 8,
+    padding: 12,
+    backgroundColor: "#2d2f31",
+    borderRadius: 12,
+    marginLeft: 12,
   },
 });
