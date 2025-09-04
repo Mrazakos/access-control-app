@@ -40,6 +40,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   const scaleValue = React.useRef(new Animated.Value(0)).current;
   const opacityValue = React.useRef(new Animated.Value(0)).current;
 
+  const BUTTON_PRESS_DELAY = 100;
+
   React.useEffect(() => {
     if (visible) {
       Animated.parallel([
@@ -96,7 +98,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   const handleButtonPress = (button: AlertButton) => {
     onDismiss();
     if (button.onPress) {
-      setTimeout(() => button.onPress!(), 100);
+      setTimeout(() => button.onPress!(), BUTTON_PRESS_DELAY);
     }
   };
 

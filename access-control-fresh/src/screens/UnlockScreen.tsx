@@ -171,7 +171,7 @@ export default function UnlockScreen() {
         )}
       </View>
 
-      {/* Access setup and Unlocking button*/}
+      {/* Access setup and Unlocking button */}
       <View style={styles.unlockContainer}>
         <TouchableOpacity
           style={[
