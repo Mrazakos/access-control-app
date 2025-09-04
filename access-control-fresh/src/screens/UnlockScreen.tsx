@@ -171,20 +171,7 @@ export default function UnlockScreen() {
         )}
       </View>
 
-      {/* Setup Door Access Button */}
-      {isConnected && !hasDoorAccess() && (
-        <TouchableOpacity
-          style={styles.setupButton}
-          onPress={setupDoorAccess}
-          disabled={isCreatingAuth}
-        >
-          <Ionicons name="shield-checkmark" size={20} color="white" />
-          <Text style={styles.setupButtonText}>
-            {isCreatingAuth ? "Setting up..." : "Setup 24h Door Access"}
-          </Text>
-        </TouchableOpacity>
-      )}
-
+      {/* Access setup and Unlocking button*/}
       <View style={styles.unlockContainer}>
         <TouchableOpacity
           style={[
