@@ -4,53 +4,32 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, Pressable, StyleSheet } from "react-native";
 import { useWallet } from "./hooks/useWallet";
+import { useAppKit, useWalletInfo } from "@reown/appkit-wagmi-react-native";
 import { useCustomAlert } from "./components/CustomAlert";
 import DevicesScreen from "./screens/DevicesScreen";
 import UnlockScreen from "./screens/UnlockScreen";
+import { CredentialTypeDemo } from "./components/examples/CredentialTypeDemo";
 
 // Import screens from the correct path
 const Tab = createBottomTabNavigator();
 
 export const MainApp = () => {
-  const { isConnected, displayAddress, connect, disconnect } = useWallet();
   const { showAlert, AlertComponent } = useCustomAlert();
-
+  const { walletInfo } = useWalletInfo();
   const getWalletName = () => {
     return "wallet";
   };
 
-  const handleWalletPress = async () => {
-    if (isConnected) {
-      const walletName = getWalletName();
+  const { open } = useAppKit();
 
-      showAlert({
-        title: "Disconnect Wallet",
-        message: `Are you sure you want to disconnect the ${displayAddress} ${walletName}?`,
-        icon: "wallet",
-        iconColor: "#ea4335",
-        buttons: [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "Disconnect",
-            style: "destructive",
-            onPress: () => {
-              disconnect();
-            },
-          },
-        ],
-      });
-    } else {
-      connect();
-    }
+  const handleWalletPress = () => {
+    open();
   };
 
   const WalletButton = () => (
     <Pressable style={styles.walletButton} onPress={handleWalletPress}>
       <Text style={styles.walletButtonText}>
-        {isConnected ? displayAddress : "Connect"}
+        {walletInfo ? "See Wallet Details" : "Connect"}
       </Text>
     </Pressable>
   );
@@ -124,7 +103,6 @@ export const MainApp = () => {
     </NavigationContainer>
   );
 };
-
 const styles = StyleSheet.create({
   walletButton: {
     backgroundColor: "#4285f4", // Google Blue

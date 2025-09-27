@@ -1,4 +1,4 @@
-import * as crypto from "crypto";
+import RNSimpleCrypto from "react-native-simple-crypto";
 import { KeyPair, VerifiableCredential } from "../types/types";
 
 /**
@@ -9,12 +9,9 @@ export class CryptoUtils {
    * Generates a simple key pair
    * @returns A newly generated RSA key pair
    */
-  static generateKeyPair(): KeyPair {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: "spki", format: "pem" },
-      privateKeyEncoding: { type: "pkcs8", format: "pem" },
-    });
+  static async generateKeyPair(): Promise<KeyPair> {
+    const { public: publicKey, private: privateKey } =
+      await RNSimpleCrypto.RSA.generateKeys(1024);
     return {
       privateKey,
       publicKey,
@@ -25,21 +22,19 @@ export class CryptoUtils {
    * Signs data with a private key
    * Can input an object (will stringify), hash it, then sign
    */
-  static sign(
+  static async sign(
     data: string | object,
     privateKey: string
-  ): Partial<VerifiableCredential> {
+  ): Promise<Partial<VerifiableCredential>> {
     const dataString = typeof data === "string" ? data : JSON.stringify(data);
-    const dataHash = crypto.createHash("sha256").update(dataString).digest();
 
     return {
-      signature: crypto
-        .sign("sha256", dataHash, {
-          key: privateKey,
-          padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-        })
-        .toString("base64"),
-      userMetaDataHash: dataHash.toString("base64"),
+      signature: await RNSimpleCrypto.RSA.sign(
+        dataString,
+        privateKey,
+        "SHA256"
+      ),
+      userMetaDataHash: await RNSimpleCrypto.SHA.sha256(dataString),
     };
   }
 }

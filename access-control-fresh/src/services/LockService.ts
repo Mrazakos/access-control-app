@@ -23,11 +23,6 @@ export interface RegisterLockOnChainRequest {
   publicKey: string;
 }
 
-export interface RevokeSignatureRequest {
-  lockId: number;
-  signature: string;
-}
-
 const LOCKS_STORAGE_KEY = "@local_locks";
 
 export class LockService {
@@ -48,7 +43,7 @@ export class LockService {
   async createLock(request: CreateLockRequest): Promise<Lock> {
     try {
       // Generate key pair for the lock
-      const keyPair = CryptoUtils.generateKeyPair();
+      const keyPair = await CryptoUtils.generateKeyPair();
 
       const locks = await this.getStoredLocks();
 

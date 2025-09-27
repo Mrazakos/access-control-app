@@ -1,7 +1,42 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useWriteContract, useAccount } from "wagmi";
+import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CryptoUtils } from "../utils/CryptoUtils";
+import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { VerifiableCredential, UserMetaData } from "../types/types";
+
+// Contract configuration
+const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3") as ViemAddress;
+
+// 📋 Credential Types
+export enum CredentialType {
+  ISSUED = "issued", // VCs you issued to others (as lock owner)
+  ACCESS = "access", // VCs others issued to you (for door access)
+}
+
+// 🔐 Extended VerifiableCredential with type classification
+export interface TypedVerifiableCredential extends VerifiableCredential {
+  type: CredentialType;
+}
+
+// 🏭 ISSUED CREDENTIAL - Stores full user metadata
+export interface IssuedCredential extends TypedVerifiableCredential {
+  type: CredentialType.ISSUED;
+  userMetaData: UserMetaData; // Store full user metadata for issued credentials
+}
+
+// 🚪 ACCESS CREDENTIAL - Stores only user metadata hash
+export interface AccessCredential extends TypedVerifiableCredential {
+  type: CredentialType.ACCESS;
+  // userMetaDataHash is already in base VerifiableCredential
+}
+
+export interface RevokeSignatureRequest {
+  lockId: number;
+  signature: string;
+}
 
 export interface CredentialRequest {
   lockId: number;
@@ -12,28 +47,69 @@ export interface CredentialRequest {
 }
 
 export interface UseVerifiableCredentialsReturn {
-  credentials: VerifiableCredential[];
+  // 📋 All credentials (both types)
+  allCredentials: (IssuedCredential | AccessCredential)[];
   isLoading: boolean;
   error: string | null;
-  issueCredential: (
-    request: CredentialRequest
-  ) => Promise<VerifiableCredential>;
-  storeCredential: (credential: VerifiableCredential) => Promise<void>;
-  getCredentials: () => Promise<VerifiableCredential[]>;
-  getCredentialById: (id: string) => Promise<VerifiableCredential | null>;
-  getCredentialsByLockId: (lockId: number) => Promise<VerifiableCredential[]>;
-  deleteCredential: (id: string) => Promise<void>;
-  refreshCredentials: () => Promise<void>;
-  isCredentialExpired: (credential: VerifiableCredential) => boolean;
-  getValidCredentials: () => Promise<VerifiableCredential[]>;
-}
 
-const STORAGE_KEY = "@verifiable_credentials";
+  // 🏭 ISSUED CREDENTIALS (VCs you issued to others - stores full userMetaData)
+  issuedCredentials: IssuedCredential[];
+  issueCredential: (request: CredentialRequest) => Promise<IssuedCredential>;
+  getIssuedCredentials: () => Promise<IssuedCredential[]>;
+  getIssuedCredentialsByLockId: (lockId: number) => Promise<IssuedCredential[]>;
+  revokeIssuedCredential: (credentialId: string) => Promise<void>;
+
+  // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
+  accessCredentials: AccessCredential[];
+  receiveAccessCredential: (credential: VerifiableCredential) => Promise<void>;
+  getAccessCredentials: () => Promise<AccessCredential[]>;
+  getValidAccessCredentials: () => Promise<AccessCredential[]>;
+  getAccessCredentialsByLockId: (lockId: number) => Promise<AccessCredential[]>;
+  deleteAccessCredential: (credentialId: string) => Promise<void>;
+
+  // 🔄 General operations
+  refreshCredentials: () => Promise<void>;
+  getCredentialById: (
+    id: string
+  ) => Promise<IssuedCredential | AccessCredential | null>;
+  isCredentialExpired: (credential: VerifiableCredential) => boolean;
+  clearAllCredentials: () => Promise<void>;
+
+  // 🔐 Signature revocation on blockchain (for issued credentials)
+  revokeSignatureOnChain: (request: RevokeSignatureRequest) => Promise<void>;
+  batchRevokeSignatures: (
+    lockId: number,
+    signatures: string[]
+  ) => Promise<void>;
+  isTransactionPending: boolean;
+  transactionHash: string | null;
+  transactionError: string | null;
+} // Separate storage keys for different credential types
+const ISSUED_CREDENTIALS_KEY = "@issued_credentials";
+const ACCESS_CREDENTIALS_KEY = "@access_credentials";
 
 export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
-  const [credentials, setCredentials] = useState<VerifiableCredential[]>([]);
+  const [issuedCredentials, setIssuedCredentials] = useState<
+    IssuedCredential[]
+  >([]);
+  const [accessCredentials, setAccessCredentials] = useState<
+    AccessCredential[]
+  >([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { address } = useAccount();
+
+  // Wagmi hooks for blockchain operations
+  const {
+    writeContract,
+    data: transactionHash,
+    error: writeError,
+    isPending: isWritePending,
+  } = useWriteContract();
+
+  const isTransactionPending = isWritePending;
+  const transactionError = writeError?.message || null;
 
   // Generate a unique credential ID
   const generateCredentialId = useCallback((): string => {
@@ -53,9 +129,9 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     []
   );
 
-  // Issue a new verifiable credential
+  // 🏭 Issue a new credential (stores full userMetaData)
   const issueCredential = useCallback(
-    async (request: CredentialRequest): Promise<VerifiableCredential> => {
+    async (request: CredentialRequest): Promise<IssuedCredential> => {
       try {
         setIsLoading(true);
         setError(null);
@@ -65,32 +141,38 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
         // Create user metadata hash using your existing crypto utilities
         const userMetaDataString = JSON.stringify(request.userMetaData);
-        const vc = CryptoUtils.sign(userMetaDataString, request.privK);
-
-        // Create the credential data for signing
-        const fullVc = {
-          ...vc,
-          id: credentialId,
-          lockId: request.lockId,
-          lockNickname: request.lockNickname,
-          issuanceDate: issuanceDate,
-          expirationDate: request.expirationDate,
-        } as VerifiableCredential;
+        const vc = await CryptoUtils.sign(userMetaDataString, request.privK);
 
         if (!vc.signature) {
           throw new Error("Failed to generate credential signature");
         }
 
-        // Store the credential
-        const existingCredentials = await getStoredCredentials();
-        const updatedCredentials = [...existingCredentials, fullVc];
+        if (!vc.signature || !vc.userMetaDataHash) {
+          throw new Error("Failed to generate credential signature or hash");
+        }
+
+        // Create the issued credential with full userMetaData
+        const issuedCredential: IssuedCredential = {
+          id: credentialId,
+          lockId: request.lockId,
+          userMetaDataHash: vc.userMetaDataHash,
+          lockNickname: request.lockNickname,
+          signature: vc.signature,
+          issuanceDate: issuanceDate,
+          expirationDate: request.expirationDate,
+          type: CredentialType.ISSUED,
+          userMetaData: request.userMetaData, // Store full metadata for issued credentials
+        };
+
+        // Store in issued credentials
+        const updatedCredentials = [...issuedCredentials, issuedCredential];
         await AsyncStorage.setItem(
-          STORAGE_KEY,
+          ISSUED_CREDENTIALS_KEY,
           JSON.stringify(updatedCredentials)
         );
-        setCredentials(updatedCredentials);
+        setIssuedCredentials(updatedCredentials);
 
-        return fullVc;
+        return issuedCredential;
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to issue credential";
@@ -100,189 +182,315 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(false);
       }
     },
-    [generateCredentialId]
+    [generateCredentialId, issuedCredentials]
   );
 
-  // Get stored credentials from AsyncStorage
-  const getStoredCredentials = useCallback(async (): Promise<
-    VerifiableCredential[]
-  > => {
-    try {
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
-      return storedData ? JSON.parse(storedData) : [];
-    } catch (err) {
-      console.error("Failed to retrieve stored credentials:", err);
-      return [];
-    }
-  }, []);
-
-  // Store a credential in local storage
-  const storeCredential = useCallback(
+  // 🚪 Receive an access credential (stores only userMetaDataHash)
+  const receiveAccessCredential = useCallback(
     async (credential: VerifiableCredential): Promise<void> => {
       try {
         setIsLoading(true);
         setError(null);
 
-        const existingCredentials = await getStoredCredentials();
+        // Create an access credential (only stores userMetaDataHash)
+        const accessCredential: AccessCredential = {
+          ...credential,
+          type: CredentialType.ACCESS,
+          // Note: Only userMetaDataHash is stored, not full userMetaData
+        };
 
         // Check if credential already exists
-        const existingIndex = existingCredentials.findIndex(
-          (cred) => cred.id === credential.id
+        const existingIndex = accessCredentials.findIndex(
+          (c) => c.id === credential.id
         );
 
-        let updatedCredentials: VerifiableCredential[];
+        let updatedCredentials: AccessCredential[];
         if (existingIndex >= 0) {
           // Update existing credential
-          updatedCredentials = [...existingCredentials];
-          updatedCredentials[existingIndex] = credential;
+          updatedCredentials = [...accessCredentials];
+          updatedCredentials[existingIndex] = accessCredential;
         } else {
           // Add new credential
-          updatedCredentials = [...existingCredentials, credential];
+          updatedCredentials = [...accessCredentials, accessCredential];
         }
 
+        setAccessCredentials(updatedCredentials);
         await AsyncStorage.setItem(
-          STORAGE_KEY,
+          ACCESS_CREDENTIALS_KEY,
           JSON.stringify(updatedCredentials)
         );
-        setCredentials(updatedCredentials);
+
+        console.log("✅ Access credential received:", credential.id);
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : "Failed to store credential";
+          err instanceof Error
+            ? err.message
+            : "Failed to receive access credential";
         setError(errorMessage);
         throw new Error(errorMessage);
       } finally {
         setIsLoading(false);
       }
     },
-    [getStoredCredentials]
+    [accessCredentials]
   );
 
-  // Get all credentials
-  const getCredentials = useCallback(async (): Promise<
-    VerifiableCredential[]
-  > => {
+  // 🔍 Load credentials from AsyncStorage
+  const loadCredentials = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const storedCredentials = await getStoredCredentials();
-      setCredentials(storedCredentials);
-      return storedCredentials;
+      // Load issued credentials
+      const issuedData = await AsyncStorage.getItem(ISSUED_CREDENTIALS_KEY);
+      const storedIssuedCredentials: IssuedCredential[] = issuedData
+        ? JSON.parse(issuedData)
+        : [];
+
+      // Load access credentials
+      const accessData = await AsyncStorage.getItem(ACCESS_CREDENTIALS_KEY);
+      const storedAccessCredentials: AccessCredential[] = accessData
+        ? JSON.parse(accessData)
+        : [];
+
+      setIssuedCredentials(storedIssuedCredentials);
+      setAccessCredentials(storedAccessCredentials);
+
+      console.log(
+        `✅ Loaded ${storedIssuedCredentials.length} issued credentials and ${storedAccessCredentials.length} access credentials`
+      );
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to get credentials";
-      setError(errorMessage);
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }, [getStoredCredentials]);
-
-  // Get credential by ID
-  const getCredentialById = useCallback(
-    async (id: string): Promise<VerifiableCredential | null> => {
-      try {
-        const storedCredentials = await getStoredCredentials();
-        return storedCredentials.find((cred) => cred.id === id) || null;
-      } catch (err) {
-        console.error("Failed to get credential by ID:", err);
-        return null;
-      }
-    },
-    [getStoredCredentials]
-  );
-
-  // Get credentials by lock ID
-  const getCredentialsByLockId = useCallback(
-    async (lockId: number): Promise<VerifiableCredential[]> => {
-      try {
-        const storedCredentials = await getStoredCredentials();
-        return storedCredentials.filter((cred) => cred.lockId === lockId);
-      } catch (err) {
-        console.error("Failed to get credentials by lock ID:", err);
-        return [];
-      }
-    },
-    [getStoredCredentials]
-  );
-
-  // Get only valid (non-expired) credentials
-  const getValidCredentials = useCallback(async (): Promise<
-    VerifiableCredential[]
-  > => {
-    try {
-      const storedCredentials = await getStoredCredentials();
-      return storedCredentials.filter((cred) => !isCredentialExpired(cred));
-    } catch (err) {
-      console.error("Failed to get valid credentials:", err);
-      return [];
-    }
-  }, [getStoredCredentials, isCredentialExpired]);
-
-  // Delete a credential
-  const deleteCredential = useCallback(
-    async (id: string): Promise<void> => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const existingCredentials = await getStoredCredentials();
-        const updatedCredentials = existingCredentials.filter(
-          (cred) => cred.id !== id
-        );
-
-        await AsyncStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(updatedCredentials)
-        );
-        setCredentials(updatedCredentials);
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to delete credential";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [getStoredCredentials]
-  );
-
-  // Clear all credentials
-  const clearAllCredentials = useCallback(async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      setCredentials([]);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to clear credentials";
-      setError(errorMessage);
-      throw new Error(errorMessage);
+      const errorMsg = "Failed to load credentials";
+      setError(errorMsg);
+      console.error(errorMsg, err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Refresh credentials from storage
+  // Load credentials on mount
+  useEffect(() => {
+    loadCredentials();
+  }, [loadCredentials]);
+
+  // 🔍 Helper functions for issued credentials
+  const getIssuedCredentials = useCallback(async (): Promise<
+    IssuedCredential[]
+  > => {
+    return issuedCredentials;
+  }, [issuedCredentials]);
+
+  const getIssuedCredentialsByLockId = useCallback(
+    async (lockId: number): Promise<IssuedCredential[]> => {
+      return issuedCredentials.filter((c) => c.lockId === lockId);
+    },
+    [issuedCredentials]
+  );
+
+  const revokeIssuedCredential = useCallback(
+    async (credentialId: string): Promise<void> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const updatedCredentials = issuedCredentials.filter(
+          (c) => c.id !== credentialId
+        );
+        setIssuedCredentials(updatedCredentials);
+
+        await AsyncStorage.setItem(
+          ISSUED_CREDENTIALS_KEY,
+          JSON.stringify(updatedCredentials)
+        );
+
+        console.log("✅ Issued credential revoked:", credentialId);
+      } catch (err) {
+        const errorMsg = "Failed to revoke issued credential";
+        setError(errorMsg);
+        console.error(errorMsg, err);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [issuedCredentials]
+  );
+
+  // 🔍 Helper functions for access credentials
+  const getAccessCredentials = useCallback(async (): Promise<
+    AccessCredential[]
+  > => {
+    return accessCredentials;
+  }, [accessCredentials]);
+
+  const getAccessCredentialsByLockId = useCallback(
+    async (lockId: number): Promise<AccessCredential[]> => {
+      return accessCredentials.filter((c) => c.lockId === lockId);
+    },
+    [accessCredentials]
+  );
+
+  const getValidAccessCredentials = useCallback(async (): Promise<
+    AccessCredential[]
+  > => {
+    return accessCredentials.filter((c) => !isCredentialExpired(c));
+  }, [accessCredentials, isCredentialExpired]);
+
+  const deleteAccessCredential = useCallback(
+    async (credentialId: string): Promise<void> => {
+      try {
+        setIsLoading(true);
+        const updatedCredentials = accessCredentials.filter(
+          (c) => c.id !== credentialId
+        );
+        setAccessCredentials(updatedCredentials);
+        await AsyncStorage.setItem(
+          ACCESS_CREDENTIALS_KEY,
+          JSON.stringify(updatedCredentials)
+        );
+        console.log("✅ Access credential deleted:", credentialId);
+      } catch (err) {
+        setError("Failed to delete access credential");
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [accessCredentials]
+  );
+
+  // 🔍 General helper functions
+  const getCredentialById = useCallback(
+    async (id: string): Promise<IssuedCredential | AccessCredential | null> => {
+      const issued = issuedCredentials.find((c) => c.id === id);
+      if (issued) return issued;
+
+      const access = accessCredentials.find((c) => c.id === id);
+      return access || null;
+    },
+    [issuedCredentials, accessCredentials]
+  );
+
   const refreshCredentials = useCallback(async (): Promise<void> => {
-    await getCredentials();
-  }, [getCredentials]);
+    await loadCredentials();
+  }, [loadCredentials]);
+
+  // Combined credentials for backward compatibility
+  const allCredentials = useMemo((): (
+    | IssuedCredential
+    | AccessCredential
+  )[] => {
+    return [...issuedCredentials, ...accessCredentials];
+  }, [issuedCredentials, accessCredentials]);
+
+  // 🗑️ Clear all credentials
+  const clearAllCredentials = useCallback(async (): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem(ISSUED_CREDENTIALS_KEY);
+      await AsyncStorage.removeItem(ACCESS_CREDENTIALS_KEY);
+      setIssuedCredentials([]);
+      setAccessCredentials([]);
+      console.log("✅ All credentials cleared");
+    } catch (err) {
+      const errorMsg = "Failed to clear credentials";
+      setError(errorMsg);
+      console.error(errorMsg, err);
+      throw err;
+    }
+  }, []);
+
+  // 🔐 Revoke signature on blockchain
+  const revokeSignatureOnChain = useCallback(
+    async (request: RevokeSignatureRequest): Promise<void> => {
+      try {
+        setError(null);
+
+        if (!address) {
+          throw new Error("Wallet not connected");
+        }
+
+        await writeContract({
+          address: CONTRACT_ADDRESS,
+          abi: AccessControl__factory.abi,
+          functionName: "revokeSignature",
+          args: [BigInt(request.lockId), request.signature],
+        });
+
+        console.log("🚫 Signature revocation submitted to blockchain");
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to revoke signature on chain";
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [writeContract, address]
+  );
+
+  // 🔐 Batch revoke signatures on blockchain
+  const batchRevokeSignatures = useCallback(
+    async (lockId: number, signatures: string[]): Promise<void> => {
+      try {
+        setError(null);
+
+        if (!address) {
+          throw new Error("Wallet not connected");
+        }
+
+        await writeContract({
+          address: CONTRACT_ADDRESS,
+          abi: AccessControl__factory.abi,
+          functionName: "batchRevokeSignatures",
+          args: [BigInt(lockId), signatures],
+        });
+
+        console.log("🚫 Batch signature revocation submitted to blockchain");
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to batch revoke signatures on chain";
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    },
+    [writeContract, address]
+  );
 
   return {
-    credentials,
+    // 📋 All credentials (both types)
+    allCredentials,
     isLoading,
     error,
+
+    // 🏭 ISSUED CREDENTIALS (VCs you issued to others - stores full userMetaData)
+    issuedCredentials,
     issueCredential,
-    storeCredential,
-    getCredentials,
-    getCredentialById,
-    getCredentialsByLockId,
-    deleteCredential,
+    getIssuedCredentials,
+    getIssuedCredentialsByLockId,
+    revokeIssuedCredential,
+
+    // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
+    accessCredentials,
+    receiveAccessCredential,
+    getAccessCredentials,
+    getValidAccessCredentials,
+    getAccessCredentialsByLockId,
+    deleteAccessCredential,
+
+    // 🔄 General operations
     refreshCredentials,
+    getCredentialById,
     isCredentialExpired,
-    getValidCredentials,
+    clearAllCredentials,
+
+    // 🔐 Signature revocation on blockchain (for issued credentials)
+    revokeSignatureOnChain,
+    batchRevokeSignatures,
+    isTransactionPending,
+    transactionHash: transactionHash || null,
+    transactionError,
   };
 };

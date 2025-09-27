@@ -11,8 +11,7 @@ import {
   Lock,
   CreateLockRequest,
   RegisterLockOnChainRequest,
-  RevokeSignatureRequest,
-} from "../services/lockService";
+} from "../services/LockService";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { Address } from "../types/types";
 
@@ -49,13 +48,8 @@ export interface UseLockReturn {
   // ✨ COMBINED OPERATION
   createAndRegisterLock: (request: CreateLockRequest) => Promise<Lock>;
 
-  // Separate blockchain operations (if you need them)
+  // Blockchain operations (lock-related only)
   registerLockOnChain: (request: RegisterLockOnChainRequest) => Promise<void>;
-  revokeSignatureOnChain: (request: RevokeSignatureRequest) => Promise<void>;
-  batchRevokeSignatures: (
-    lockId: number,
-    signatures: string[]
-  ) => Promise<void>;
   transferLockOwnership: (lockId: number, newOwner: Address) => Promise<void>;
   isTransactionPending: boolean;
   transactionHash: string | null;
@@ -329,66 +323,6 @@ export const useLock = (): UseLockReturn => {
     [writeContract, address]
   );
 
-  // Revoke signature on blockchain
-  const revokeSignatureOnChain = useCallback(
-    async (request: RevokeSignatureRequest): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "revokeSignature",
-          args: [BigInt(request.lockId), request.signature],
-        });
-
-        console.log("Signature revocation submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to revoke signature on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
-  // Batch revoke signatures on blockchain
-  const batchRevokeSignatures = useCallback(
-    async (lockId: number, signatures: string[]): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "batchRevokeSignatures",
-          args: [BigInt(lockId), signatures],
-        });
-
-        console.log("Batch signature revocation submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to batch revoke signatures on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
   // Transfer lock ownership on blockchain
   const transferLockOwnership = useCallback(
     async (lockId: number, newOwner: Address): Promise<void> => {
@@ -481,10 +415,8 @@ export const useLock = (): UseLockReturn => {
     // ✨ COMBINED OPERATION - Use this for simple lock creation + blockchain registration
     createAndRegisterLock,
 
-    // Separate blockchain operations (if you need them)
+    // Blockchain operations (lock-related only)
     registerLockOnChain,
-    revokeSignatureOnChain,
-    batchRevokeSignatures,
     transferLockOwnership,
     isTransactionPending,
     transactionHash: transactionHash || null,

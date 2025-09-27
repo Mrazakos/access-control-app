@@ -1,55 +1,58 @@
-import * as React from "react";
+import "@walletconnect/react-native-compat";
+import { WagmiProvider } from "wagmi";
+import { mainnet, polygon, arbitrum } from "@wagmi/core/chains";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  createAppKit,
+  defaultWagmiConfig,
+  AppKit,
+} from "@reown/appkit-wagmi-react-native";
 import { MainApp } from "./src/MainApp";
-import { WalletConnectModal } from "@walletconnect/modal-react-native";
 import {
   WALLETCONNECT_PROJECT_ID,
   APP_NAME,
   APP_DESCRIPTION,
   APP_URL,
-  ETHEREUM_CHAIN_ID,
 } from "@env";
 
+// 0. Setup queryClient
+const queryClient = new QueryClient();
+
+// 1. Get projectId at https://dashboard.reown.com
 const projectId = WALLETCONNECT_PROJECT_ID;
 
-const providerMetaData = {
+// 2. Create config
+const metadata = {
   name: APP_NAME,
   description: APP_DESCRIPTION,
   url: APP_URL,
-  icons: [],
+  icons: ["https://avatars.githubusercontent.com/u/179229932"],
   redirect: {
-    native: "",
-    universal: "",
+    native: "yourapp://",
+    universal: "yourapp.com",
   },
 };
 
-export default function App() {
-  const chains = [ETHEREUM_CHAIN_ID];
+const chains = [mainnet, polygon, arbitrum] as const;
 
+const wagmiConfig = defaultWagmiConfig({ chains, projectId, metadata });
+
+// 3. Create modal
+createAppKit({
+  projectId,
+  metadata,
+  wagmiConfig,
+  defaultChain: mainnet, // Optional
+  enableAnalytics: true, // Optional - defaults to your Cloud configuration
+});
+
+export default function App() {
   return (
-    <>
-      <MainApp />
-      <WalletConnectModal
-        explorerRecommendedWalletIds={[
-          "c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96",
-        ]}
-        projectId={projectId}
-        providerMetadata={providerMetaData}
-        sessionParams={{
-          namespaces: {
-            eip155: {
-              methods: [
-                "eth_sendTransaction",
-                "eth_signTransaction",
-                "eth_sign",
-                "personal_sign",
-                "eth_signTypedData",
-              ],
-              chains: chains,
-              events: ["chainChanged", "accountsChanged"],
-            },
-          },
-        }}
-      />
-    </>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <MainApp />
+        <AppKit />
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }
