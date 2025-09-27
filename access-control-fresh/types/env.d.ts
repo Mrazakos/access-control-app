@@ -6,4 +6,5 @@ declare module "@env" {
   export const ETHEREUM_CHAIN_ID: string;
   export const EXPO_PUBLIC_INFURA_API_KEY: string;
   export const EXPO_PUBLIC_APP_SCHEME: string;
+  export const EXPO_PUBLIC_CONTRACT_ADDRESS: string;
 }
