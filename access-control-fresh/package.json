@@ -17,6 +17,7 @@
     "@react-navigation/native": "^7.1.17",
     "@reown/appkit-wagmi-react-native": "^1.3.1",
     "@tanstack/react-query": "^5.85.5",
+    "@types/react-native": "^0.72.8",
     "@walletconnect/react-native-compat": "^2.21.9",
     "ethers": "^6.15.0",
     "expo": "~53.0.20",
