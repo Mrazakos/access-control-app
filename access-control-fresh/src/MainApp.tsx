@@ -3,7 +3,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, Pressable, StyleSheet } from "react-native";
-import { useWallet } from "./hooks/useWallet";
 import { useAppKit, useWalletInfo } from "@reown/appkit-wagmi-react-native";
 import { useCustomAlert } from "./components/CustomAlert";
 import DevicesScreen from "./screens/DevicesScreen";

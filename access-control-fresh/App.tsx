@@ -1,6 +1,6 @@
 import "@walletconnect/react-native-compat";
 import { WagmiProvider } from "wagmi";
-import { mainnet, polygon, arbitrum } from "@wagmi/core/chains";
+import { mainnet, sepolia } from "@wagmi/core/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createAppKit,
@@ -14,14 +14,12 @@ import {
   APP_DESCRIPTION,
   APP_URL,
 } from "@env";
+import React from "react";
 
-// 0. Setup queryClient
 const queryClient = new QueryClient();
 
-// 1. Get projectId at https://dashboard.reown.com
 const projectId = WALLETCONNECT_PROJECT_ID;
 
-// 2. Create config
 const metadata = {
   name: APP_NAME,
   description: APP_DESCRIPTION,
@@ -33,17 +31,16 @@ const metadata = {
   },
 };
 
-const chains = [mainnet, polygon, arbitrum] as const;
+const chains = [mainnet, sepolia] as const;
 
 const wagmiConfig = defaultWagmiConfig({ chains, projectId, metadata });
 
-// 3. Create modal
 createAppKit({
   projectId,
   metadata,
   wagmiConfig,
-  defaultChain: mainnet, // Optional
-  enableAnalytics: true, // Optional - defaults to your Cloud configuration
+  defaultChain: sepolia,
+  enableAnalytics: true,
 });
 
 export default function App() {

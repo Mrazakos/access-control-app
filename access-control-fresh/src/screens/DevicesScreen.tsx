@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCustomAlert } from "../components/CustomAlert";
+import { LockManagementExample } from "../components/LockManagementExample";
 
 interface Device {
   id: string;
@@ -73,23 +74,7 @@ export default function DevicesScreen() {
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.addButton} onPress={addDevice}>
-        <Ionicons name="add" size={24} color="white" />
-        <Text style={styles.addButtonText}>Add New Device</Text>
-      </TouchableOpacity>
-
-      <FlatList
-        data={devices}
-        renderItem={renderDevice}
-        keyExtractor={(item) => item.id}
-        style={styles.deviceList}
-      />
-
-      <AlertComponent />
-    </View>
-  );
+  return <LockManagementExample />;
 }
 
 const styles = StyleSheet.create({
