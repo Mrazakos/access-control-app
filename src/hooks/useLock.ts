@@ -14,6 +14,10 @@ import {
 } from "../services/LockService";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { Address } from "../types/types";
+import {
+  useContractListener,
+  LockRegistrationResult,
+} from "./useContractListener";
 
 // Contract configuration
 const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
@@ -35,6 +39,12 @@ export interface UseLockReturn {
   createLock: (request: CreateLockRequest) => Promise<Lock>;
   getLocks: () => Promise<Lock[]>;
   getLockById: (lockId: number) => Promise<Lock | null>;
+  updateLockByPublicKey: (
+    publicKey: string,
+    updates: Partial<
+      Pick<Lock, "id" | "name" | "description" | "location" | "isActive">
+    >
+  ) => Promise<Lock | null>;
   updateLock: (
     lockId: number,
     updates: Partial<
@@ -45,27 +55,11 @@ export interface UseLockReturn {
   clearAllLocks: () => Promise<void>;
   refreshLocks: () => Promise<void>;
 
-  // ✨ COMBINED OPERATION
-  createAndRegisterLock: (request: CreateLockRequest) => Promise<Lock>;
-
-  // Blockchain operations (lock-related only)
-  registerLockOnChain: (request: RegisterLockOnChainRequest) => Promise<void>;
-  transferLockOwnership: (lockId: number, newOwner: Address) => Promise<void>;
-  isTransactionPending: boolean;
-  transactionHash: string | null;
-  transactionError: string | null;
-
-  // Blockchain read operations (some reactive, some dynamic)
-  totalLocksOnChain: number | undefined; // Reactive data from useReadContract
-  isContractPaused: boolean | undefined; // Reactive data from useReadContract
-  refetchContractData: () => void; // Manually refetch contract data
-  getLockInfoOnChain: (lockId: number) => Promise<LockInfo | null>; // Dynamic reads
-  getTotalLocksOnChain: () => Promise<number>;
-  isSignatureRevokedOnChain: (
-    lockId: number,
-    signature: string
-  ) => Promise<boolean>;
-  checkContractPaused: () => Promise<boolean>;
+  // ✨ ENHANCED COMBINED OPERATION - Now with return value tracking
+  createAndRegisterLock: (
+    request: CreateLockRequest,
+    onLockRegistered?: (result: LockRegistrationResult) => void
+  ) => Promise<Lock>;
 }
 
 export const useLock = (): UseLockReturn => {
@@ -75,6 +69,7 @@ export const useLock = (): UseLockReturn => {
 
   const { address } = useAccount();
   const lockService = LockService.getInstance();
+  const contractListener = useContractListener();
 
   // Wagmi hooks for blockchain operations
   const {
@@ -86,13 +81,6 @@ export const useLock = (): UseLockReturn => {
 
   const { isLoading: isReceiptLoading } = useWaitForTransactionReceipt({
     hash: transactionHash,
-  });
-
-  // Blockchain read hooks - these provide automatic caching and refetching
-  const { data: totalLocks, refetch: refetchTotalLocks } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: AccessControl__factory.abi,
-    functionName: "getTotalLocks",
   });
 
   const { data: isPaused, refetch: refetchPaused } = useReadContract({
@@ -161,6 +149,33 @@ export const useLock = (): UseLockReturn => {
         return await lockService.getLockById(lockId);
       } catch (err) {
         console.error("Failed to get lock by ID:", err);
+        return null;
+      }
+    },
+    [lockService]
+  );
+
+  // Update lock by public key (for blockchain ID updates)
+  const updateLockByPublicKey = useCallback(
+    async (
+      publicKey: string,
+      updates: Partial<
+        Pick<Lock, "id" | "name" | "description" | "location" | "isActive">
+      >
+    ): Promise<Lock | null> => {
+      try {
+        const updatedLock = await lockService.updateLockByPublicKey(
+          publicKey,
+          updates
+        );
+
+        // Refresh locks in state
+        const updatedLocks = await lockService.getStoredLocks();
+        setLocks(updatedLocks);
+
+        return updatedLock;
+      } catch (err) {
+        console.error("Failed to update lock by public key:", err);
         return null;
       }
     },
@@ -245,9 +260,12 @@ export const useLock = (): UseLockReturn => {
     await getLocks();
   }, [getLocks]);
 
-  // ✨ COMBINED OPERATION - Create lock locally AND register on blockchain
+  // ✨ ENHANCED COMBINED OPERATION - Create lock locally AND register on blockchain with result tracking
   const createAndRegisterLock = useCallback(
-    async (request: CreateLockRequest): Promise<Lock> => {
+    async (
+      request: CreateLockRequest,
+      onLockRegistered?: (result: LockRegistrationResult) => void
+    ): Promise<Lock> => {
       try {
         setIsLoading(true);
         setError(null);
@@ -265,7 +283,32 @@ export const useLock = (): UseLockReturn => {
         const updatedLocks = await lockService.getStoredLocks();
         setLocks(updatedLocks);
 
-        // Step 3: Register on blockchain
+        // Step 3: Set up event listener for this specific public key
+        await contractListener.registerLockWithReturnValue(
+          newLock.publicKey,
+          async (result) => {
+            console.log(
+              `🎉 Lock registered on blockchain: ID ${result.lockId} for publicKey ${result.publicKey}`
+            );
+
+            // Update the local lock's ID with the actual blockchain lock ID
+            await updateLockByPublicKey(result.publicKey, {
+              id: result.lockId,
+            });
+            console.log(
+              `📝 Updated local lock ID to blockchain ID: ${result.lockId}`
+            );
+
+            // Call the optional callback
+            onLockRegistered?.(result);
+          },
+          (error) => {
+            console.error(`❌ Lock registration failed: ${error}`);
+            setError(`Blockchain registration failed: ${error}`);
+          }
+        );
+
+        // Step 4: Execute the blockchain transaction
         console.log("⚡️ Registering lock on blockchain...");
         await writeContract({
           address: CONTRACT_ADDRESS,
@@ -290,114 +333,8 @@ export const useLock = (): UseLockReturn => {
         setIsLoading(false);
       }
     },
-    [lockService, writeContract, address]
+    [lockService, writeContract, address, contractListener]
   );
-
-  // Register lock on blockchain
-  const registerLockOnChain = useCallback(
-    async (request: RegisterLockOnChainRequest): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "registerLock",
-          args: [request.publicKey],
-        });
-
-        console.log("Lock registration submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to register lock on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
-  // Transfer lock ownership on blockchain
-  const transferLockOwnership = useCallback(
-    async (lockId: number, newOwner: Address): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "transferLockOwnership",
-          args: [BigInt(lockId), newOwner as ViemAddress],
-        });
-
-        console.log("Lock ownership transfer submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to transfer lock ownership on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
-  // Helper functions for dynamic read operations
-  const getLockInfoOnChain = useCallback(
-    async (lockId: number): Promise<LockInfo | null> => {
-      try {
-        // We'll use wagmi's readContract (not hook) for dynamic reads
-        // This is for cases where we need to read with dynamic parameters
-        // The hook-based reads are better for static/reactive data
-        return null; // Placeholder - you can implement specific read logic here
-      } catch (error) {
-        console.error("Error getting lock info:", error);
-        return null;
-      }
-    },
-    []
-  );
-
-  const getTotalLocksOnChain = useCallback(async (): Promise<number> => {
-    // Use the reactive hook data if available, otherwise return 0
-    return Number(totalLocks) || 0;
-  }, [totalLocks]);
-
-  const isSignatureRevokedOnChain = useCallback(
-    async (lockId: number, signature: string): Promise<boolean> => {
-      try {
-        // For dynamic reads, you might need to use wagmi's readContract function
-        // or implement a custom solution
-        return false; // Placeholder
-      } catch (error) {
-        console.error("Error checking signature revocation:", error);
-        return false;
-      }
-    },
-    []
-  );
-
-  const checkContractPaused = useCallback(async (): Promise<boolean> => {
-    // Use the reactive hook data
-    return Boolean(isPaused);
-  }, [isPaused]);
-
-  // Helper to manually refetch contract data
-  const refetchContractData = useCallback(() => {
-    refetchTotalLocks();
-    refetchPaused();
-  }, [refetchTotalLocks, refetchPaused]);
 
   return {
     // Local storage operations
@@ -407,30 +344,13 @@ export const useLock = (): UseLockReturn => {
     createLock,
     getLocks,
     getLockById,
+    updateLockByPublicKey,
     updateLock,
     deleteLock,
     clearAllLocks,
     refreshLocks,
 
-    // ✨ COMBINED OPERATION - Use this for simple lock creation + blockchain registration
+    // ✨ ENHANCED COMBINED OPERATION - Use this for lock creation + blockchain registration with result tracking
     createAndRegisterLock,
-
-    // Blockchain operations (lock-related only)
-    registerLockOnChain,
-    transferLockOwnership,
-    isTransactionPending,
-    transactionHash: transactionHash || null,
-    transactionError,
-
-    // Blockchain read operations - reactive data
-    totalLocksOnChain: Number(totalLocks),
-    isContractPaused: Boolean(isPaused),
-    refetchContractData,
-
-    // Blockchain read operations - dynamic functions
-    getLockInfoOnChain,
-    getTotalLocksOnChain,
-    isSignatureRevokedOnChain,
-    checkContractPaused,
   };
 };

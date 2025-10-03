@@ -103,7 +103,77 @@ export class LockService {
   }
 
   /**
-   * Update a lock's metadata
+   * Update lock with blockchain lock ID
+   */
+  async updateLockWithBlockchainId(
+    publicKey: string,
+    blockchainLockId: number
+  ): Promise<Lock | null> {
+    try {
+      const locks = await this.getStoredLocks();
+      const lockIndex = locks.findIndex((lock) => lock.publicKey === publicKey);
+
+      if (lockIndex === -1) {
+        console.warn(`Lock with publicKey ${publicKey} not found`);
+        return null;
+      }
+
+      const updatedLock = {
+        ...locks[lockIndex],
+        blockchainLockId,
+      };
+
+      locks[lockIndex] = updatedLock;
+      await AsyncStorage.setItem(LOCKS_STORAGE_KEY, JSON.stringify(locks));
+
+      console.log(
+        `✅ Updated lock ${updatedLock.id} with blockchain ID: ${blockchainLockId}`
+      );
+      return updatedLock;
+    } catch (error) {
+      console.error("Error updating lock with blockchain ID:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a lock by public key - allows updating the id field with blockchain lock ID
+   */
+  async updateLockByPublicKey(
+    publicKey: string,
+    updates: Partial<
+      Pick<Lock, "id" | "name" | "description" | "location" | "isActive">
+    >
+  ): Promise<Lock | null> {
+    try {
+      const locks = await this.getStoredLocks();
+      const lockIndex = locks.findIndex((lock) => lock.publicKey === publicKey);
+
+      if (lockIndex === -1) {
+        console.warn(`Lock with publicKey ${publicKey} not found`);
+        return null;
+      }
+
+      const updatedLock = { ...locks[lockIndex], ...updates };
+      locks[lockIndex] = updatedLock;
+
+      await AsyncStorage.setItem(LOCKS_STORAGE_KEY, JSON.stringify(locks));
+
+      if (updates.id) {
+        console.log(
+          `✅ Updated lock with publicKey ${publicKey} to blockchain ID: ${updates.id}`
+        );
+      }
+
+      return updatedLock;
+    } catch (error) {
+      console.error("Error updating lock by public key:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a lock's metadata by lock ID
    */
   async updateLock(
     lockId: number,
