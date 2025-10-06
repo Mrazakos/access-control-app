@@ -295,98 +295,134 @@ export default function DeviceScreen() {
     <Modal
       visible={isEdit ? showEditForm : showAddForm}
       animationType="slide"
-      presentationStyle="pageSheet"
+      transparent={true}
+      onRequestClose={() => {
+        if (isEdit) {
+          setShowEditForm(false);
+          setEditingLock(null);
+        } else {
+          setShowAddForm(false);
+        }
+      }}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>
-            {isEdit ? "Edit Lock" : "Add New Lock"}
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              if (isEdit) {
-                setShowEditForm(false);
-                setEditingLock(null);
-              } else {
-                setShowAddForm(false);
-              }
-            }}
-          >
-            <Ionicons name="close" size={24} color="#9aa0a6" />
-          </TouchableOpacity>
-        </View>
+      {/* Dark backdrop - tap to dismiss */}
+      <TouchableOpacity
+        style={styles.modalBackdrop}
+        activeOpacity={1}
+        onPress={() => {
+          if (isEdit) {
+            setShowEditForm(false);
+            setEditingLock(null);
+          } else {
+            setShowAddForm(false);
+          }
+        }}
+      >
+        {/* Modal content container */}
+        <TouchableOpacity
+          style={styles.modalContent}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {/* Google Wallet style handle */}
+          <View style={styles.modalHandle} />
 
-        <ScrollView style={styles.formContainer}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Lock Name *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              placeholder="Enter lock name"
-              placeholderTextColor="#9aa0a6"
-            />
+          {/* Header with Google Material style */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {isEdit ? "Edit Lock" : "Add New Lock"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {isEdit ? "Update your lock details" : "Create a new smart lock"}
+            </Text>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Description</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              value={formData.description}
-              onChangeText={(text) =>
-                setFormData({ ...formData, description: text })
-              }
-              placeholder="Enter description (optional)"
-              placeholderTextColor="#9aa0a6"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Location</Text>
-            <TextInput
-              style={styles.textInput}
-              value={formData.location}
-              onChangeText={(text) =>
-                setFormData({ ...formData, location: text })
-              }
-              placeholder="Enter location (optional)"
-              placeholderTextColor="#9aa0a6"
-            />
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => {
-              if (isEdit) {
-                setShowEditForm(false);
-                setEditingLock(null);
-              } else {
-                setShowAddForm(false);
-              }
-            }}
+          <ScrollView
+            style={styles.formContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Lock Name</Text>
+              <TextInput
+                style={styles.textInput}
+                value={formData.name}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, name: text })
+                }
+                placeholder="Enter lock name"
+                placeholderTextColor="#5f6368"
+              />
+            </View>
 
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={isEdit ? handleUpdateLock : handleAddLock}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#ffffff" size="small" />
-            ) : (
-              <Text style={styles.submitButtonText}>
-                {isEdit ? "Update" : "Create"}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Description</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                value={formData.description}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, description: text })
+                }
+                placeholder="Enter description (optional)"
+                placeholderTextColor="#5f6368"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Location</Text>
+              <TextInput
+                style={styles.textInput}
+                value={formData.location}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, location: text })
+                }
+                placeholder="Enter location (optional)"
+                placeholderTextColor="#5f6368"
+              />
+            </View>
+          </ScrollView>
+
+          {/* Google Material style action buttons */}
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelActionButton}
+              onPress={() => {
+                if (isEdit) {
+                  setShowEditForm(false);
+                  setEditingLock(null);
+                } else {
+                  setShowAddForm(false);
+                }
+              }}
+            >
+              <Text style={styles.cancelActionText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.primaryActionButton}
+              onPress={isEdit ? handleUpdateLock : handleAddLock}
+              disabled={isLoading || !formData.name.trim()}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={isEdit ? "checkmark" : "add"}
+                    size={20}
+                    color="#ffffff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.primaryActionText}>
+                    {isEdit ? "Update" : "Create"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 
@@ -594,78 +630,122 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "600",
   },
-  // Modal styles
-  modalContainer: {
+  // Google Wallet style modal
+  modalBackdrop: {
     flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
     backgroundColor: "#1f1f1f",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: "75%",
+    elevation: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
+  modalHandle: {
+    width: 32,
+    height: 4,
+    backgroundColor: "#5f6368",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 8,
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#3c4043",
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 24,
+    fontWeight: "400",
     color: "#ffffff",
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#9aa0a6",
+    fontWeight: "400",
   },
   formContainer: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 8,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "500",
-    color: "#ffffff",
+    color: "#9aa0a6",
     marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   textInput: {
     backgroundColor: "#202124",
     borderWidth: 1,
     borderColor: "#3c4043",
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
     color: "#ffffff",
+    fontWeight: "400",
   },
   textArea: {
-    height: 80,
+    height: 100,
     textAlignVertical: "top",
   },
-  modalFooter: {
+  modalActions: {
     flexDirection: "row",
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: "#3c4043",
-    gap: 12,
   },
-  cancelButton: {
+  cancelActionButton: {
     flex: 1,
-    backgroundColor: "#2d2f31",
-    paddingVertical: 16,
-    borderRadius: 8,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#5f6368",
+    paddingVertical: 14,
+    borderRadius: 24,
     alignItems: "center",
+    justifyContent: "center",
   },
-  cancelButtonText: {
+  cancelActionText: {
     color: "#9aa0a6",
-    fontWeight: "600",
+    fontWeight: "500",
+    fontSize: 16,
   },
-  submitButton: {
+  primaryActionButton: {
     flex: 1,
     backgroundColor: "#4285f4",
-    paddingVertical: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 24,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    shadowColor: "#4285f4",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  submitButtonText: {
+  primaryActionText: {
     color: "#ffffff",
     fontWeight: "600",
+    fontSize: 16,
   },
 });
