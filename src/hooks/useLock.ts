@@ -4,9 +4,9 @@ import {
   useWaitForTransactionReceipt,
   useReadContract,
   useAccount,
-  useWatchContractEvent,
 } from "wagmi";
-import { Address as ViemAddress, Log } from "viem";
+import { Address as ViemAddress } from "viem";
+import { ethers } from "ethers";
 import { LockService, Lock, CreateLockRequest } from "../services/LockService";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { Address } from "../types/types";
@@ -52,7 +52,7 @@ export interface UseLockReturn {
   clearAllLocks: () => Promise<void>;
   refreshLocks: () => Promise<void>;
 
-  // ✨ ENHANCED COMBINED OPERATION - Now with return value tracking
+  // ✨ ENHANCED COMBINED OPERATION - Now with transaction receipt tracking
   createAndRegisterLock: (
     request: CreateLockRequest,
     onLockRegistered?: (result: LockRegistrationResult) => void
@@ -86,7 +86,12 @@ export const useLock = (): UseLockReturn => {
     isPending: isWritePending,
   } = useWriteContract();
 
-  const { isLoading: isReceiptLoading } = useWaitForTransactionReceipt({
+  const {
+    data: transactionReceipt,
+    isLoading: isReceiptLoading,
+    isSuccess: isReceiptSuccess,
+    error: receiptError,
+  } = useWaitForTransactionReceipt({
     hash: transactionHash,
   });
 
@@ -96,77 +101,141 @@ export const useLock = (): UseLockReturn => {
     functionName: "paused",
   });
 
-  useWatchContractEvent({
-    address: CONTRACT_ADDRESS,
-    abi: AccessControl__factory.abi,
-    eventName: "LockRegistered",
-    onLogs: (logs: Log[]) => {
-      console.log(`📡 Received ${logs.length} LockRegistered event(s)`);
+  // 🚀 NEW: Handle transaction receipt instead of events
+  useEffect(() => {
+    console.log(pendingRegistration, isReceiptSuccess);
+    if (transactionReceipt && pendingRegistration && isReceiptSuccess) {
+      console.log("📄 Transaction receipt received!");
+      console.log("📄 Transaction status:", transactionReceipt.status);
+      console.log("📄 Transaction hash:", transactionReceipt.transactionHash);
+      console.log("📄 Logs count:", transactionReceipt.logs.length);
 
-      logs.forEach((log: any) => {
-        console.log("📋 Raw log:", log);
-        console.log("📋 Log args:", log.args);
+      if (transactionReceipt.status === "success") {
+        // Parse the LockRegistered event from transaction logs
+        try {
+          const iface = new ethers.Interface(AccessControl__factory.abi);
+          let eventFound = false;
 
-        const { lockId, owner, publicKey } = log.args;
-        console.log(`📋 Parsed event data:`, {
-          lockId: lockId?.toString(),
-          owner,
-          publicKey,
-        });
+          for (const log of transactionReceipt.logs) {
+            if (log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+              try {
+                const parsedLog = iface.parseLog({
+                  topics: log.topics as string[],
+                  data: log.data,
+                });
 
-        console.log(`📋 Current pending registration:`, {
-          pendingKey: pendingRegistration?.publicKey,
-          hasCallback: !!pendingRegistration?.callback,
-          hasTimeout: !!pendingRegistration?.timeoutId,
-        });
+                console.log("📋 Parsed log:", parsedLog?.name, parsedLog?.args);
 
-        console.log(
-          `📋 Keys match:`,
-          publicKey === pendingRegistration?.publicKey
-        );
+                if (parsedLog?.name === "LockRegistered") {
+                  const { lockId, owner, publicKey } = parsedLog.args;
 
-        if (
-          pendingRegistration &&
-          publicKey === pendingRegistration.publicKey
-        ) {
-          console.log(
-            `🎉 Lock registered on blockchain: ID ${lockId} for publicKey ${publicKey}`
-          );
+                  console.log(`🎯 LockRegistered event found:`, {
+                    lockId: lockId?.toString(),
+                    owner,
+                    publicKey,
+                    pendingKey: pendingRegistration.publicKey,
+                  });
 
-          // Update the local lock's ID and status with the actual blockchain lock ID
-          updateLockByPublicKey(publicKey, {
-            id: Number(lockId),
-            status: "active",
-          }).then(() => {
-            refreshLocks();
+                  if (publicKey === pendingRegistration.publicKey) {
+                    console.log(
+                      `🎉 Lock registered successfully! ID: ${lockId}`
+                    );
+                    eventFound = true;
+
+                    // Update the lock with blockchain ID
+                    updateLockByPublicKey(publicKey, {
+                      id: Number(lockId),
+                      status: "active",
+                    })
+                      .then(() => {
+                        refreshLocks();
+
+                        // Call callback if provided
+                        pendingRegistration?.callback?.({
+                          lockId: Number(lockId),
+                          owner,
+                          publicKey,
+                          transactionHash: transactionReceipt.transactionHash,
+                        });
+
+                        // Clear timeout and pending registration
+                        if (pendingRegistration?.timeoutId) {
+                          clearTimeout(pendingRegistration.timeoutId);
+                          console.log(
+                            `✅ Registration timeout cleared for successful registration`
+                          );
+                        }
+                        setPendingRegistration(null);
+                      })
+                      .catch((err) => {
+                        console.error("Error updating lock:", err);
+                      });
+
+                    break;
+                  }
+                }
+              } catch (parseError) {
+                // Not our event, continue
+                console.log("📋 Could not parse log (not our event)");
+              }
+            }
+          }
+
+          if (!eventFound) {
             console.log(
-              `📝 Updated local lock ID to blockchain ID: ${Number(lockId)}`
+              "⚠️ LockRegistered event not found in transaction logs"
             );
-
-            // Call the callback if provided
-            pendingRegistration?.callback?.({
-              lockId: Number(lockId),
-              owner,
-              publicKey,
+            console.log(
+              "📋 Available logs:",
+              transactionReceipt.logs.map((log) => ({
+                address: log.address,
+                topics: log.topics,
+              }))
+            );
+          }
+        } catch (err) {
+          console.error("❌ Error parsing transaction logs:", err);
+          // Set lock to failed on parsing error
+          if (pendingRegistration) {
+            updateLockByPublicKey(pendingRegistration.publicKey, {
+              status: "failed",
             });
-
-            // Clear timeout and pending registration
-            if (pendingRegistration?.timeoutId) {
+            if (pendingRegistration.timeoutId) {
               clearTimeout(pendingRegistration.timeoutId);
-              console.log(
-                `✅ Registration timeout cleared for successful registration: ${publicKey}`
-              );
             }
             setPendingRegistration(null);
-          });
-        } else {
-          console.log(
-            `⚠️ Event received but not matching pending registration`
-          );
+          }
         }
+      } else {
+        // Transaction failed
+        console.log("❌ Transaction failed");
+        if (pendingRegistration) {
+          updateLockByPublicKey(pendingRegistration.publicKey, {
+            status: "failed",
+          });
+          if (pendingRegistration.timeoutId) {
+            clearTimeout(pendingRegistration.timeoutId);
+          }
+          setPendingRegistration(null);
+        }
+      }
+    }
+  }, [transactionReceipt, pendingRegistration, isReceiptSuccess]);
+
+  // Handle transaction receipt errors
+  useEffect(() => {
+    if (receiptError && pendingRegistration) {
+      console.error("❌ Transaction receipt error:", receiptError);
+      updateLockByPublicKey(pendingRegistration.publicKey, {
+        status: "failed",
       });
-    },
-  });
+      if (pendingRegistration.timeoutId) {
+        clearTimeout(pendingRegistration.timeoutId);
+      }
+      setPendingRegistration(null);
+      setError("Transaction failed. Please try again.");
+    }
+  }, [receiptError, pendingRegistration]);
 
   // Load locks on mount
   useEffect(() => {
@@ -290,7 +359,7 @@ export const useLock = (): UseLockReturn => {
           "Lock registration timed out after 2 minutes. Please try again."
         );
         console.log(`❌ Lock registration failed due to timeout: ${publicKey}`);
-      }, 2 * 60 * 1000); // 3 minutes
+      }, 2 * 60 * 1000);
     },
     [updateLockByPublicKey]
   );
@@ -398,7 +467,7 @@ export const useLock = (): UseLockReturn => {
         const updatedLocks = await lockService.getStoredLocks();
         setLocks(updatedLocks);
 
-        // Step 3: Set up pending registration to wait for blockchain event
+        // Step 3: Set up pending registration to wait for transaction receipt
         console.log(
           `🔄 Setting up pending registration for publicKey: ${newLock.publicKey}`
         );
@@ -417,7 +486,7 @@ export const useLock = (): UseLockReturn => {
         console.log(`📤 Contract address: ${CONTRACT_ADDRESS}`);
         console.log(`📤 User address: ${address}`);
 
-        const txResult = await writeContract({
+        await writeContract({
           address: CONTRACT_ADDRESS,
           abi: AccessControl__factory.abi,
           functionName: "registerLock",
@@ -425,9 +494,7 @@ export const useLock = (): UseLockReturn => {
         });
 
         console.log("🚀 Lock registration submitted to blockchain!");
-        console.log(`📤 Transaction hash: ${transactionHash}`);
-        console.log(`📝 Transaction will be confirmed automatically`);
-        console.log(`🔍 Now waiting for LockRegistered event...`);
+        console.log(`📝 Now waiting for transaction receipt...`);
 
         return newLock;
       } catch (err) {
@@ -473,7 +540,7 @@ export const useLock = (): UseLockReturn => {
         // Update lock status to syncing
         await updateLockByPublicKey(lock.publicKey, { status: "syncing" });
 
-        // Set up pending registration to wait for blockchain event
+        // Set up pending registration to wait for transaction receipt
         console.log(
           `🔄 Setting up retry registration for publicKey: ${lock.publicKey}`
         );
@@ -497,7 +564,7 @@ export const useLock = (): UseLockReturn => {
         });
 
         console.log("🚀 Lock retry registration submitted to blockchain!");
-        console.log(`📝 Transaction will be confirmed automatically`);
+        console.log(`📝 Now waiting for transaction receipt...`);
       } catch (err) {
         // Clear pending registration and timeout on error and set status to failed
         if (pendingRegistration?.timeoutId) {
