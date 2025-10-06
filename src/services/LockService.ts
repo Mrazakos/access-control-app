@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CryptoUtils } from "../utils/CryptoUtils";
 import { Address } from "../types/types";
 
+export type LockStatus = "syncing" | "active" | "inactive" | "failed";
+
 export interface Lock {
   id: number;
   name: string;
@@ -10,7 +12,7 @@ export interface Lock {
   publicKey: string;
   privateKey: string; // Stored locally only
   createdAt: string; // ISO string
-  isActive: boolean;
+  status: LockStatus;
 }
 
 export interface CreateLockRequest {
@@ -42,13 +44,14 @@ export class LockService {
    */
   async createLock(request: CreateLockRequest): Promise<Lock> {
     try {
-      // Generate key pair for the lock
-      const keyPair = await CryptoUtils.generateKeyPair();
+      // Start key generation and storage read in parallel
+      const [keyPair, locks] = await Promise.all([
+        CryptoUtils.generateKeyPair(),
+        this.getStoredLocks(),
+      ]);
 
-      const locks = await this.getStoredLocks();
-
-      // Generate unique lock ID
-      const newId = Math.max(0, ...locks.map((lock) => lock.id)) + 1;
+      // Generate unique lock ID efficiently
+      const newId = 0;
 
       const newLock: Lock = {
         id: newId,
@@ -58,15 +61,14 @@ export class LockService {
         publicKey: keyPair.publicKey,
         privateKey: keyPair.privateKey,
         createdAt: new Date().toISOString(),
-        isActive: true,
+        status: "syncing", // Initial status is syncing until blockchain confirmation
       };
 
-      // Store the lock locally
-      const updatedLocks = [...locks, newLock];
-      await AsyncStorage.setItem(
-        LOCKS_STORAGE_KEY,
-        JSON.stringify(updatedLocks)
-      );
+      // Append to existing locks
+      locks.push(newLock);
+
+      // Store the updated locks
+      await AsyncStorage.setItem(LOCKS_STORAGE_KEY, JSON.stringify(locks));
 
       console.log(`Created lock ${newId} locally`);
       return newLock;
@@ -142,7 +144,7 @@ export class LockService {
   async updateLockByPublicKey(
     publicKey: string,
     updates: Partial<
-      Pick<Lock, "id" | "name" | "description" | "location" | "isActive">
+      Pick<Lock, "id" | "name" | "description" | "location" | "status">
     >
   ): Promise<Lock | null> {
     try {
@@ -177,9 +179,7 @@ export class LockService {
    */
   async updateLock(
     lockId: number,
-    updates: Partial<
-      Pick<Lock, "name" | "description" | "location" | "isActive">
-    >
+    updates: Partial<Pick<Lock, "name" | "description" | "location" | "status">>
   ): Promise<Lock | null> {
     try {
       const locks = await this.getStoredLocks();

@@ -13,16 +13,18 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useCustomAlert } from "../components/CustomAlert";
 import { useLock } from "../hooks/useLock";
-import { Lock, CreateLockRequest } from "../services/LockService";
+import { Lock, LockStatus, CreateLockRequest } from "../services/LockService";
 
-export default function DevicesScreen() {
+export default function DeviceScreen() {
   const {
     locks,
     isLoading,
     error,
     createAndRegisterLock,
     updateLock,
+    updateLockByPublicKey,
     deleteLock,
+    retryLockRegistration,
   } = useLock();
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -168,10 +170,43 @@ export default function DevicesScreen() {
     });
   };
 
-  const getLockStatus = (lock: Lock): "active" | "inactive" | "syncing" => {
-    if (!lock.isActive) return "inactive";
-    // Check if lock ID exists (has been registered on blockchain)
-    return lock.id > 0 ? "active" : "syncing";
+  const handleRetryRegistration = async (lock: Lock) => {
+    try {
+      // Show immediate feedback that retry is starting
+      showAlert({
+        title: "Retrying Registration",
+        message: `Attempting to register "${lock.name}" on blockchain...`,
+        icon: "refresh",
+        iconColor: "#fbbc04",
+        buttons: [{ text: "OK" }],
+      });
+
+      await retryLockRegistration(lock, (result) => {
+        showAlert({
+          title: "Success",
+          message: `Lock "${lock.name}" successfully registered on blockchain with ID: ${result.lockId}`,
+          icon: "checkmark-circle",
+          iconColor: "#34a853",
+          buttons: [{ text: "OK" }],
+        });
+      });
+    } catch (err) {
+      showAlert({
+        title: "Registration Failed",
+        message:
+          err instanceof Error ? err.message : "Failed to retry registration",
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+    }
+  };
+
+  const getLockStatus = (
+    lock: Lock
+  ): "active" | "inactive" | "syncing" | "failed" => {
+    // Use the status directly from the lock object
+    return lock.status;
   };
 
   const renderLockCard = ({ item: lock }: { item: Lock }) => {
@@ -189,28 +224,45 @@ export default function DevicesScreen() {
           )}
           <Text style={styles.lockId}>ID: {lock.id}</Text>
 
-          <View style={styles.statusContainer}>
+          <TouchableOpacity
+            style={styles.statusContainer}
+            onPress={() => {
+              if (status === "failed") {
+                handleRetryRegistration(lock);
+              }
+            }}
+            disabled={status !== "failed"}
+          >
             <View
               style={[
                 styles.statusDot,
                 {
                   backgroundColor:
                     status === "active"
-                      ? "#34a853"
+                      ? "#34a853" // Green for active
                       : status === "syncing"
-                      ? "#fbbc04"
-                      : "#ea4335",
+                      ? "#fbbc04" // Yellow for syncing
+                      : status === "inactive"
+                      ? "#9aa0a6" // Gray for inactive
+                      : "#ea4335", // Red for failed
                 },
               ]}
             />
-            <Text style={styles.statusText}>
+            <Text
+              style={[
+                styles.statusText,
+                status === "failed" && styles.clickableStatusText,
+              ]}
+            >
               {status === "active"
                 ? "Active"
                 : status === "syncing"
                 ? "Syncing..."
-                : "Inactive"}
+                : status === "inactive"
+                ? "Inactive"
+                : "Failed (tap to retry)"}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.actionButtons}>
@@ -338,21 +390,18 @@ export default function DevicesScreen() {
     </Modal>
   );
 
-  if (error) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Ionicons name="alert-circle" size={48} color="#ea4335" />
-        <Text style={styles.errorText}>Error: {error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => window.location.reload()}
-        >
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
-        <AlertComponent />
-      </View>
-    );
-  }
+  // Show error alert if there's an error
+  useEffect(() => {
+    if (error) {
+      showAlert({
+        title: "Error",
+        message: error,
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+    }
+  }, [error, showAlert]);
 
   return (
     <View style={styles.container}>
@@ -488,6 +537,10 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
     color: "#ffffff",
     fontWeight: "500",
+  },
+  clickableStatusText: {
+    textDecorationLine: "underline",
+    opacity: 0.8,
   },
   actionButtons: {
     flexDirection: "row",
