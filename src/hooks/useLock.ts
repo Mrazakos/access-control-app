@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -75,6 +75,9 @@ export const useLock = (): UseLockReturn => {
     timeoutId?: NodeJS.Timeout;
   } | null>(null);
 
+  // Ref to track processed transactions to prevent loops
+  const processedTxHashes = useRef<Set<string>>(new Set());
+
   const { address } = useAccount();
   const lockService = LockService.getInstance();
 
@@ -105,10 +108,20 @@ export const useLock = (): UseLockReturn => {
   useEffect(() => {
     console.log(pendingRegistration, isReceiptSuccess);
     if (transactionReceipt && pendingRegistration && isReceiptSuccess) {
+      // Prevent processing the same transaction multiple times
+      const txHash = transactionReceipt.transactionHash;
+      if (processedTxHashes.current.has(txHash)) {
+        console.log("🔄 Transaction already processed, skipping...");
+        return;
+      }
+
       console.log("📄 Transaction receipt received!");
       console.log("📄 Transaction status:", transactionReceipt.status);
       console.log("📄 Transaction hash:", transactionReceipt.transactionHash);
       console.log("📄 Logs count:", transactionReceipt.logs.length);
+
+      // Mark as processed
+      processedTxHashes.current.add(txHash);
 
       if (transactionReceipt.status === "success") {
         // Parse the LockRegistered event from transaction logs
@@ -220,7 +233,7 @@ export const useLock = (): UseLockReturn => {
         }
       }
     }
-  }, [transactionReceipt, pendingRegistration, isReceiptSuccess]);
+  }, [transactionReceipt, pendingRegistration?.publicKey, isReceiptSuccess]);
 
   // Handle transaction receipt errors
   useEffect(() => {
