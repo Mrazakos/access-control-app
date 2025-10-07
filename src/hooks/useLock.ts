@@ -106,7 +106,6 @@ export const useLock = (): UseLockReturn => {
 
   // 🚀 NEW: Handle transaction receipt instead of events
   useEffect(() => {
-    console.log(pendingRegistration, isReceiptSuccess);
     if (transactionReceipt && pendingRegistration && isReceiptSuccess) {
       // Prevent processing the same transaction multiple times
       const txHash = transactionReceipt.transactionHash;

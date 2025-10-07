@@ -13,6 +13,11 @@ import React from "react";
 
 const queryClient = new QueryClient();
 
+// Global flag to prevent multiple WalletConnect initializations
+declare global {
+  var __WALLETCONNECT_INITIALIZED__: boolean | undefined;
+}
+
 const projectId = environment.walletConnectProjectId;
 
 const metadata = {
@@ -30,13 +35,25 @@ const chains = [mainnet, sepolia] as const;
 
 const wagmiConfig = defaultWagmiConfig({ chains, projectId, metadata });
 
-createAppKit({
-  projectId,
-  metadata,
-  wagmiConfig,
-  defaultChain: sepolia,
-  enableAnalytics: true,
-});
+// Initialize AppKit only once globally
+if (!global.__WALLETCONNECT_INITIALIZED__) {
+  try {
+    createAppKit({
+      projectId,
+      metadata,
+      wagmiConfig,
+      defaultChain: sepolia,
+      enableAnalytics: true,
+      themeMode: "dark",
+    });
+    global.__WALLETCONNECT_INITIALIZED__ = true;
+    console.log("✅ WalletConnect AppKit initialized");
+  } catch (error) {
+    console.warn("⚠️ WalletConnect initialization error:", error);
+  }
+} else {
+  console.log("🔄 WalletConnect already initialized, skipping...");
+}
 
 export default function App() {
   return (
