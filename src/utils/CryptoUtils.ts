@@ -53,7 +53,7 @@ export class CryptoUtils {
 
       return {
         signature: signature,
-        userMetaDataHash: dataHash,
+        signedMessageHash: dataHash,
       };
     } catch (error) {
       throw new Error(`ECDSA signing failed: ${error}`);
@@ -139,11 +139,11 @@ export class CryptoUtils {
 
       const signResult = await this.sign(testData, keyPair.privateKey);
       results.push("✅ Signing completed");
-      results.push(`📝 Data hash: ${signResult.userMetaDataHash}`);
+      results.push(`📝 Data hash: ${signResult.signedMessageHash}`);
 
       // Test proper hash-based verification
       const isValid = this.verify(
-        signResult.userMetaDataHash!, // Use the hash, not original data
+        signResult.signedMessageHash!, // Use the hash, not original data
         signResult.signature!,
         keyPair.publicKey
       );

@@ -70,7 +70,7 @@ export default function UnlockScreen() {
               </View>
               <Text style={styles.credId}>ID: {cred.id}</Text>
               <Text style={styles.hashText}>
-                Hash: {cred.userMetaDataHash?.substring(0, 20)}...
+                Hash: {cred.signedMessageHash?.substring(0, 20)}...
               </Text>
               <Text style={styles.dateText}>
                 Expires:{" "}

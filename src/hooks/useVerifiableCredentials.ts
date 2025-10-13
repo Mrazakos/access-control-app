@@ -139,15 +139,24 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         const credentialId = generateCredentialId();
         const issuanceDate = new Date().toISOString();
 
-        // Create user metadata hash using your existing crypto utilities
-        const userMetaDataString = JSON.stringify(request.userMetaData);
-        const vc = await CryptoUtils.sign(userMetaDataString, request.privK);
+        // Hash the user data for privacy (user data won't be revealed)
+        const userDataHash = CryptoUtils.hash(
+          JSON.stringify(request.userMetaData)
+        );
+
+        // Sign a message containing the user data hash + expiration date
+        // This way user data stays private but expiration is cryptographically protected
+        const message = JSON.stringify({
+          userDataHash: userDataHash,
+          expirationDate: request.expirationDate || null,
+        });
+        const vc = await CryptoUtils.sign(message, request.privK);
 
         if (!vc.signature) {
           throw new Error("Failed to generate credential signature");
         }
 
-        if (!vc.signature || !vc.userMetaDataHash) {
+        if (!vc.signature || !vc.signedMessageHash) {
           throw new Error("Failed to generate credential signature or hash");
         }
 
@@ -155,9 +164,10 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         const issuedCredential: IssuedCredential = {
           id: credentialId,
           lockId: request.lockId,
-          userMetaDataHash: vc.userMetaDataHash,
+          signedMessageHash: vc.signedMessageHash,
           lockNickname: request.lockNickname,
           signature: vc.signature,
+          userDataHash: userDataHash, // Include the hash for verification
           issuanceDate: issuanceDate,
           expirationDate: request.expirationDate,
           type: CredentialType.ISSUED,
