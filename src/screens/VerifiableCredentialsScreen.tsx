@@ -65,14 +65,6 @@ export default function VerifiableCredentialsScreen({
     loadCredentials();
   }, [lock.id, issuedCredentials]);
 
-  // Additional effect to ensure immediate UI updates
-  useEffect(() => {
-    const credentials = issuedCredentials.filter(
-      (cred) => cred.lockId === lock.id
-    );
-    setLockCredentials(credentials);
-  }, [issuedCredentials, lock.id]);
-
   const loadCredentials = async () => {
     try {
       console.log("🔄 Loading credentials for lock:", lock.id);
@@ -128,8 +120,8 @@ export default function VerifiableCredentialsScreen({
       };
 
       console.log("🚀 Issuing credential for lock:", lock.id);
-      await issueCredential(request);
-      console.log("✅ Credential issued successfully");
+      const newCredential = await issueCredential(request);
+      console.log("✅ Credential issued successfully:", newCredential);
 
       showAlert({
         title: "Success",
@@ -140,9 +132,6 @@ export default function VerifiableCredentialsScreen({
       });
 
       setShowAddForm(false);
-      // Force immediate refresh by re-loading credentials
-      console.log("🔄 Refreshing credentials...");
-      await loadCredentials();
     } catch (error) {
       showAlert({
         title: "Error",
