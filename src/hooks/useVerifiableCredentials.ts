@@ -57,7 +57,6 @@ export interface UseVerifiableCredentialsReturn {
   issueCredential: (request: CredentialRequest) => Promise<IssuedCredential>;
   getIssuedCredentials: () => Promise<IssuedCredential[]>;
   getIssuedCredentialsByLockId: (lockId: number) => Promise<IssuedCredential[]>;
-  revokeIssuedCredential: (credentialId: string) => Promise<void>;
 
   // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
   accessCredentials: AccessCredential[];
@@ -76,7 +75,7 @@ export interface UseVerifiableCredentialsReturn {
   clearAllCredentials: () => Promise<void>;
 
   // 🔐 Signature revocation on blockchain (for issued credentials)
-  revokeSignatureOnChain: (request: RevokeSignatureRequest) => Promise<void>;
+  revokeIssuedCredential: (credentialId: string) => Promise<void>;
   batchRevokeSignatures: (
     lockId: number,
     signatures: string[]
@@ -303,6 +302,35 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(true);
         setError(null);
 
+        // Find the credential to get its signature and lockId
+        const credentialToRevoke = issuedCredentials.find(
+          (c) => c.id === credentialId
+        );
+
+        if (!credentialToRevoke) {
+          throw new Error("Credential not found");
+        }
+
+        if (!address) {
+          throw new Error("Wallet not connected");
+        }
+
+        console.log("🚫 Revoking credential on blockchain:", credentialId);
+
+        // First, revoke the signature on the blockchain
+        await writeContract({
+          address: CONTRACT_ADDRESS,
+          abi: AccessControl__factory.abi,
+          functionName: "revokeSignature",
+          args: [
+            BigInt(credentialToRevoke.lockId),
+            credentialToRevoke.signature,
+          ],
+        });
+
+        console.log("� Signature revocation submitted to blockchain");
+
+        // Remove from local storage after blockchain transaction is submitted
         const updatedCredentials = issuedCredentials.filter(
           (c) => c.id !== credentialId
         );
@@ -313,7 +341,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           JSON.stringify(updatedCredentials)
         );
 
-        console.log("✅ Issued credential revoked:", credentialId);
+        console.log("✅ Issued credential revoked successfully:", credentialId);
       } catch (err) {
         const errorMsg = "Failed to revoke issued credential";
         setError(errorMsg);
@@ -323,7 +351,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(false);
       }
     },
-    [issuedCredentials]
+    [issuedCredentials, address, writeContract]
   );
 
   // 🔍 Helper functions for access credentials
@@ -409,36 +437,6 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     }
   }, []);
 
-  // 🔐 Revoke signature on blockchain
-  const revokeSignatureOnChain = useCallback(
-    async (request: RevokeSignatureRequest): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "revokeSignature",
-          args: [BigInt(request.lockId), request.signature],
-        });
-
-        console.log("🚫 Signature revocation submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to revoke signature on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
   // 🔐 Batch revoke signatures on blockchain
   const batchRevokeSignatures = useCallback(
     async (lockId: number, signatures: string[]): Promise<void> => {
@@ -480,7 +478,6 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     issueCredential,
     getIssuedCredentials,
     getIssuedCredentialsByLockId,
-    revokeIssuedCredential,
 
     // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
     accessCredentials,
@@ -497,7 +494,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     clearAllCredentials,
 
     // 🔐 Signature revocation on blockchain (for issued credentials)
-    revokeSignatureOnChain,
+    revokeIssuedCredential,
     batchRevokeSignatures,
     isTransactionPending,
     transactionHash: transactionHash || null,

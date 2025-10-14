@@ -40,6 +40,7 @@ export default function VerifiableCredentialsScreen({
     getIssuedCredentialsByLockId,
     isLoading,
     error,
+    revokeIssuedCredential,
   } = useVerifiableCredentials();
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -143,7 +144,7 @@ export default function VerifiableCredentialsScreen({
     }
   };
 
-  const handleRevoke = (credential: any) => {
+  const handleRevoke = (credential: IssuedCredential) => {
     showAlert({
       title: "Revoke Credential",
       message: `Revoke access for ${
@@ -156,14 +157,7 @@ export default function VerifiableCredentialsScreen({
         {
           text: "Revoke",
           onPress: () => {
-            // TODO: Implement revoke functionality
-            showAlert({
-              title: "Feature Coming Soon",
-              message: "Revoke functionality will be implemented soon.",
-              icon: "construct",
-              iconColor: "#4285f4",
-              buttons: [{ text: "OK" }],
-            });
+            revokeIssuedCredential(credential.id!);
           },
         },
       ],
