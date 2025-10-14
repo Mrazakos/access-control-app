@@ -9,11 +9,16 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCustomAlert } from "../components/CustomAlert";
 import { useLock } from "../hooks/useLock";
 import { Lock, LockStatus, CreateLockRequest } from "../services/LockService";
+import VerifiableCredentialsScreen from "./VerifiableCredentialsScreen";
 
 export default function DeviceScreen() {
   const {
@@ -33,6 +38,8 @@ export default function DeviceScreen() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingLock, setEditingLock] = useState<Lock | null>(null);
+  const [showVCsScreen, setShowVCsScreen] = useState(false);
+  const [selectedLock, setSelectedLock] = useState<Lock | null>(null);
   const [formData, setFormData] = useState<CreateLockRequest>({
     name: "",
     description: "",
@@ -160,14 +167,8 @@ export default function DeviceScreen() {
   };
 
   const handleVCsNavigation = (lock: Lock) => {
-    // TODO: Navigate to VCs screen for this lock
-    showAlert({
-      title: "Verifiable Credentials",
-      message: `VCs management for "${lock.name}" will be implemented soon.`,
-      icon: "document-text",
-      iconColor: "#4285f4",
-      buttons: [{ text: "OK" }],
-    });
+    setSelectedLock(lock);
+    setShowVCsScreen(true);
   };
 
   const handleRetryRegistration = async (lock: Lock) => {
@@ -305,19 +306,24 @@ export default function DeviceScreen() {
         }
       }}
     >
-      {/* Dark backdrop - tap to dismiss */}
-      <TouchableOpacity
+      <KeyboardAvoidingView
         style={styles.modalBackdrop}
-        activeOpacity={1}
-        onPress={() => {
-          if (isEdit) {
-            setShowEditForm(false);
-            setEditingLock(null);
-          } else {
-            setShowAddForm(false);
-          }
-        }}
+        behavior={"padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -70}
       >
+        {/* Dark backdrop - tap to dismiss */}
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => {
+            if (isEdit) {
+              setShowEditForm(false);
+              setEditingLock(null);
+            } else {
+              setShowAddForm(false);
+            }
+          }}
+        />
         {/* Modal content container */}
         <TouchableOpacity
           style={styles.modalContent}
@@ -341,46 +347,50 @@ export default function DeviceScreen() {
             style={styles.formContainer}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Lock Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.name}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, name: text })
-                }
-                placeholder="Enter lock name"
-                placeholderTextColor="#5f6368"
-              />
-            </View>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Lock Name</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={formData.name}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, name: text })
+                    }
+                    placeholder="Enter lock name"
+                    placeholderTextColor="#5f6368"
+                  />
+                </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, description: text })
-                }
-                placeholder="Enter description (optional)"
-                placeholderTextColor="#5f6368"
-                multiline
-                numberOfLines={3}
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Description</Text>
+                  <TextInput
+                    style={[styles.textInput, styles.textArea]}
+                    value={formData.description}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, description: text })
+                    }
+                    placeholder="Enter description (optional)"
+                    placeholderTextColor="#5f6368"
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.location}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, location: text })
-                }
-                placeholder="Enter location (optional)"
-                placeholderTextColor="#5f6368"
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Location</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={formData.location}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, location: text })
+                    }
+                    placeholder="Enter location (optional)"
+                    placeholderTextColor="#5f6368"
+                  />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
           </ScrollView>
 
           {/* Google Material style action buttons */}
@@ -422,7 +432,7 @@ export default function DeviceScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -471,6 +481,24 @@ export default function DeviceScreen() {
 
       {renderFormModal(false)}
       {renderFormModal(true)}
+
+      {/* Verifiable Credentials Screen Modal */}
+      {showVCsScreen && selectedLock && (
+        <Modal
+          visible={showVCsScreen}
+          animationType="slide"
+          presentationStyle="fullScreen"
+        >
+          <VerifiableCredentialsScreen
+            lock={selectedLock}
+            onBack={() => {
+              setShowVCsScreen(false);
+              setSelectedLock(null);
+            }}
+          />
+        </Modal>
+      )}
+
       <AlertComponent />
     </View>
   );
@@ -640,7 +668,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1f1f1f",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: "75%",
+    maxHeight: "80%",
+    minHeight: "60%",
     elevation: 16,
     shadowColor: "#000",
     shadowOffset: {
