@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCustomAlert } from "../components/CustomAlert";
 import {
   AccessCredential,
@@ -25,19 +26,18 @@ export default function UnlockScreen() {
     setSearchQuery,
     isCredentialExpired,
     deleteAccessCredential,
-    refreshCredentials,
+    refreshAccessCredentials,
   } = useVerifiableCredentials();
   const { showAlert, AlertComponent } = useCustomAlert();
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
-  // Refresh credentials on component mount and when coming back to this screen
-  useEffect(() => {
-    refreshCredentials();
-  }, [refreshCredentials]);
-
-  useEffect(() => {
-    console.log("Updated accessCredentials:", accessCredentials);
-  }, [accessCredentials]);
+  // Refresh credentials every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log("🔄 UnlockScreen focused - refreshing access credentials...");
+      refreshAccessCredentials();
+    }, [refreshAccessCredentials])
+  );
 
   const handleUnlock = async (credentialId: string) => {
     setUnlockingId(credentialId);
@@ -90,7 +90,7 @@ export default function UnlockScreen() {
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          onPress={() => refreshCredentials()}
+          onPress={() => refreshAccessCredentials()}
           style={styles.refreshButton}
         >
           <Ionicons name="refresh" size={20} color="#4285f4" />
@@ -146,9 +146,9 @@ export default function UnlockScreen() {
                 </View>
                 <View style={styles.cardInfo}>
                   <Text style={styles.lockName} numberOfLines={1}>
-                    {cred.lockNickname || `Lock #${cred.lockId}`}
+                    Lock: {cred.lockNickname || `Unnamed Lock`}
                   </Text>
-                  <Text style={styles.lockId}>ID: {cred.lockId}</Text>
+                  <Text style={styles.lockId}>Lock ID: {cred.lockId}</Text>
                   <View style={styles.expirationContainer}>
                     <Ionicons name="time-outline" size={14} color="#9aa0a6" />
                     <Text style={styles.expirationText}>

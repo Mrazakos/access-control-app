@@ -40,10 +40,29 @@ export default function DeviceScreen() {
   const [editingLock, setEditingLock] = useState<Lock | null>(null);
   const [showVCsScreen, setShowVCsScreen] = useState(false);
   const [selectedLock, setSelectedLock] = useState<Lock | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState<CreateLockRequest>({
     name: "",
     description: "",
     location: "",
+  });
+
+  // Filter locks based on search query
+  const filteredLocks = locks.filter((lock) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase().trim();
+    const lockName = lock.name.toLowerCase();
+    const lockId = lock.id.toString();
+    const lockDescription = lock.description?.toLowerCase() || "";
+    const lockLocation = lock.location?.toLowerCase() || "";
+
+    return (
+      lockName.includes(query) ||
+      lockId.includes(query) ||
+      lockDescription.includes(query) ||
+      lockLocation.includes(query)
+    );
   });
 
   const addLock = () => {
@@ -451,10 +470,33 @@ export default function DeviceScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.addButton} onPress={addLock}>
-        <Ionicons name="add-circle-outline" size={24} color="#ffffff" />
-        <Text style={styles.addButtonText}>Add New Lock</Text>
-      </TouchableOpacity>
+      {/* Add Button and Search Bar */}
+      <View style={styles.topBarContainer}>
+        <TouchableOpacity style={styles.addButtonCompact} onPress={addLock}>
+          <Ionicons name="add" size={20} color="#ffffff" />
+        </TouchableOpacity>
+
+        <View style={styles.searchContainer}>
+          <Ionicons
+            name="search"
+            size={20}
+            color="#9aa0a6"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search locks..."
+            placeholderTextColor="#9aa0a6"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={20} color="#9aa0a6" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {isLoading && locks.length === 0 ? (
         <View style={styles.centerContent}>
@@ -469,10 +511,18 @@ export default function DeviceScreen() {
             Create your first smart lock to get started
           </Text>
         </View>
+      ) : filteredLocks.length === 0 ? (
+        <View style={styles.centerContent}>
+          <Ionicons name="search" size={48} color="#666" />
+          <Text style={styles.emptyText}>No locks match your search</Text>
+          <Text style={styles.emptySubtext}>
+            Try searching with different terms
+          </Text>
+        </View>
       ) : (
         <FlatList
           style={styles.lockList}
-          data={locks}
+          data={filteredLocks}
           renderItem={renderLockCard}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
@@ -517,7 +567,6 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: "#4285f4", // Google Blue
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 16,
@@ -776,5 +825,46 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "600",
     fontSize: 16,
+  },
+  // Top bar with add button and search
+  topBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 12,
+  },
+  addButtonCompact: {
+    backgroundColor: "#4285f4",
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#4285f4",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  // Search styles
+  searchContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2a2d32",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#3c4043",
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "400",
   },
 });

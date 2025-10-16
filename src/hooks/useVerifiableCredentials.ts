@@ -70,7 +70,9 @@ export interface UseVerifiableCredentialsReturn {
   deleteAccessCredential: (credentialId: string) => Promise<void>;
 
   // 🔄 General operations
-  refreshCredentials: () => Promise<void>;
+  refreshIssuedCredentials: () => Promise<void>;
+  refreshAccessCredentials: () => Promise<void>;
+
   getCredentialById: (
     id: string
   ) => Promise<IssuedCredential | AccessCredential | null>;
@@ -270,7 +272,27 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
   );
 
   // 🔍 Load credentials from AsyncStorage
-  const loadCredentials = useCallback(async (): Promise<void> => {
+  const loadAccessCredentials = useCallback(async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Load access credentials
+      const accessData = await AsyncStorage.getItem(ACCESS_CREDENTIALS_KEY);
+      const storedAccessCredentials: AccessCredential[] = accessData
+        ? JSON.parse(accessData)
+        : [];
+
+      setAccessCredentials(storedAccessCredentials);
+    } catch (err) {
+      const errorMsg = "Failed to load credentials";
+      setError(errorMsg);
+      console.error(errorMsg, err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  const loadIssuedCredentials = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -281,20 +303,9 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         ? JSON.parse(issuedData)
         : [];
 
-      // Load access credentials
-      const accessData = await AsyncStorage.getItem(ACCESS_CREDENTIALS_KEY);
-      const storedAccessCredentials: AccessCredential[] = accessData
-        ? JSON.parse(accessData)
-        : [];
-
       setIssuedCredentials(storedIssuedCredentials);
-      setAccessCredentials(storedAccessCredentials);
-
-      console.log(
-        `✅ Loaded ${storedIssuedCredentials.length} issued credentials and ${storedAccessCredentials.length} access credentials`
-      );
     } catch (err) {
-      const errorMsg = "Failed to load credentials";
+      const errorMsg = "Failed to load issued credentials";
       setError(errorMsg);
       console.error(errorMsg, err);
     } finally {
@@ -302,10 +313,15 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     }
   }, []);
 
-  // Load credentials on mount
+  // Load access credentials on mount
   useEffect(() => {
-    loadCredentials();
-  }, [loadCredentials]);
+    loadAccessCredentials();
+  }, [loadAccessCredentials]);
+
+  // Load issued credentials on mount
+  useEffect(() => {
+    loadIssuedCredentials();
+  }, [loadIssuedCredentials]);
 
   // 🔍 Helper functions for issued credentials
   const getIssuedCredentials = useCallback(async (): Promise<
@@ -434,9 +450,13 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     [issuedCredentials, accessCredentials]
   );
 
-  const refreshCredentials = useCallback(async (): Promise<void> => {
-    await loadCredentials();
-  }, [loadCredentials]);
+  const refreshAccessCredentials = useCallback(async (): Promise<void> => {
+    await loadAccessCredentials();
+  }, [loadAccessCredentials]);
+
+  const refreshIssuedCredentials = useCallback(async (): Promise<void> => {
+    await loadIssuedCredentials();
+  }, [loadIssuedCredentials]);
 
   // Combined credentials for backward compatibility
   const allCredentials = useMemo((): (
@@ -516,7 +536,8 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     deleteAccessCredential,
 
     // 🔄 General operations
-    refreshCredentials,
+    refreshIssuedCredentials,
+    refreshAccessCredentials,
     getCredentialById,
     isCredentialExpired,
     clearAllCredentials,
