@@ -60,6 +60,9 @@ export interface UseVerifiableCredentialsReturn {
 
   // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
   accessCredentials: AccessCredential[];
+  filteredAccessCredentials: AccessCredential[];
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
   receiveAccessCredential: (credential: VerifiableCredential) => Promise<void>;
   getAccessCredentials: () => Promise<AccessCredential[]>;
   getValidAccessCredentials: () => Promise<AccessCredential[]>;
@@ -94,6 +97,10 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
   const [accessCredentials, setAccessCredentials] = useState<
     AccessCredential[]
   >([]);
+  const [filteredAccessCredentials, setFilteredAccessCredentials] = useState<
+    AccessCredential[]
+  >([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,6 +116,22 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
   const isTransactionPending = isWritePending;
   const transactionError = writeError?.message || null;
+
+  // Update filtered credentials whenever accessCredentials or searchQuery changes
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredAccessCredentials(accessCredentials);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    const filtered = accessCredentials.filter((cred) => {
+      const lockName = cred.lockNickname?.toLowerCase() || "";
+      const lockId = cred.lockId?.toString() || "";
+      return lockName.includes(query) || lockId.includes(query);
+    });
+    setFilteredAccessCredentials(filtered);
+  }, [accessCredentials, searchQuery]);
 
   // Generate a unique credential ID
   const generateCredentialId = useCallback((): string => {
@@ -228,6 +251,8 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           ACCESS_CREDENTIALS_KEY,
           JSON.stringify(updatedCredentials)
         );
+
+        setAccessCredentials(updatedCredentials);
 
         console.log("✅ Access credential received:", credential.id);
       } catch (err) {
@@ -481,6 +506,9 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
     // 🚪 ACCESS VCs (VCs others issued to you - stores only userMetaDataHash)
     accessCredentials,
+    filteredAccessCredentials,
+    searchQuery,
+    setSearchQuery,
     receiveAccessCredential,
     getAccessCredentials,
     getValidAccessCredentials,

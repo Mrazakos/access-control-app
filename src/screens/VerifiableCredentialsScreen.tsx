@@ -23,6 +23,7 @@ import {
   IssuedCredential,
 } from "../hooks/useVerifiableCredentials";
 import { Lock } from "../services/LockService";
+import { VerifiableCredential } from "../types/types";
 import { UserMetaData } from "../types/types";
 
 interface VerifiableCredentialsScreenProps {
@@ -41,6 +42,7 @@ export default function VerifiableCredentialsScreen({
     isLoading,
     error,
     revokeIssuedCredential,
+    receiveAccessCredential,
   } = useVerifiableCredentials();
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -164,15 +166,39 @@ export default function VerifiableCredentialsScreen({
     });
   };
 
-  const handleShare = (credential: any) => {
-    // TODO: Implement share functionality
-    showAlert({
-      title: "Share Credential",
-      message: "Share functionality will be implemented soon.",
-      icon: "share",
-      iconColor: "#4285f4",
-      buttons: [{ text: "OK" }],
-    });
+  const handleShare = async (credential: any) => {
+    try {
+      // Convert the issued credential to a basic VerifiableCredential (without userMetaData)
+      const accessCredential: VerifiableCredential = {
+        signedMessageHash: credential.signedMessageHash,
+        lockId: credential.lockId,
+        lockNickname: credential.lockNickname,
+        signature: credential.signature,
+        userDataHash: credential.userDataHash,
+        expirationDate: credential.expirationDate,
+        issuanceDate: credential.issuanceDate,
+        id: credential.id,
+      };
+
+      // Save as access credential
+      await receiveAccessCredential(accessCredential);
+
+      showAlert({
+        title: "Success",
+        message: "Credential saved as access credential!",
+        icon: "checkmark-circle",
+        iconColor: "#34a853",
+        buttons: [{ text: "OK" }],
+      });
+    } catch (error) {
+      showAlert({
+        title: "Error",
+        message: `Failed to save credential: ${error}`,
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+    }
   };
 
   const renderCredentialItem = ({ item: credential }: { item: any }) => (
