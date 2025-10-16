@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useWriteContract, useAccount } from "wagmi";
 import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { v4 as uuidv4 } from "uuid";
 import { CryptoUtils } from "../utils/CryptoUtils";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { VerifiableCredential, UserMetaData } from "../types/types";
@@ -135,9 +136,9 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     setFilteredAccessCredentials(filtered);
   }, [accessCredentials, searchQuery]);
 
-  // Generate a unique credential ID
+  // Generate a unique credential ID using UUID v4
   const generateCredentialId = useCallback((): string => {
-    return `vc:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    return `vc:${uuidv4()}`;
   }, []);
 
   // Check if a credential is expired
@@ -253,8 +254,6 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           ACCESS_CREDENTIALS_KEY,
           JSON.stringify(updatedCredentials)
         );
-
-        setAccessCredentials(updatedCredentials);
 
         console.log("✅ Access credential received:", credential.id);
       } catch (err) {

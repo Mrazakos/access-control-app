@@ -102,16 +102,6 @@ export class CryptoUtils {
     }
   }
 
-  // Utility functions
-  static generateAddress(): string {
-    const randomWallet = ethers.Wallet.createRandom();
-    return `addr_${randomWallet.address.slice(2)}`; // Remove 0x prefix
-  }
-
-  static generateId(): number {
-    return Math.floor(Math.random() * 1000000);
-  }
-
   static hash(data: string): string {
     return ethers.keccak256(ethers.toUtf8Bytes(data));
   }
