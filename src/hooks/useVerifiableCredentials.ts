@@ -368,7 +368,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           ],
         });
 
-        console.log("� Signature revocation submitted to blockchain");
+        console.log("🚫 Signature revocation submitted to blockchain");
 
         // Remove from local storage after blockchain transaction is submitted
         const updatedCredentials = issuedCredentials.filter(
