@@ -14,10 +14,6 @@ const Tab = createBottomTabNavigator();
 export const MainApp = () => {
   const { showAlert, AlertComponent } = useCustomAlert();
   const { walletInfo } = useWalletInfo();
-  const getWalletName = () => {
-    return "wallet";
-  };
-
   const { open } = useAppKit();
 
   const handleWalletPress = () => {
