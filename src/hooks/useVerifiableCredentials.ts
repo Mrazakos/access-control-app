@@ -137,7 +137,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
   // Generate a unique credential ID
   const generateCredentialId = useCallback((): string => {
-    return `vc:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`;
+    return `vc:${Date.now()}:${Math.random().toString(36).substring(2, 11)}`;
   }, []);
 
   // Check if a credential is expired
