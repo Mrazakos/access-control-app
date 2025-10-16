@@ -473,7 +473,7 @@ export default function DeviceScreen() {
       {/* Add Button and Search Bar */}
       <View style={styles.topBarContainer}>
         <TouchableOpacity style={styles.addButtonCompact} onPress={addLock}>
-          <Ionicons name="add" size={20} color="#ffffff" />
+          <Ionicons name="add" size={24} color="#ffffff" />
         </TouchableOpacity>
 
         <View style={styles.searchContainer}>
@@ -835,8 +835,8 @@ const styles = StyleSheet.create({
   },
   addButtonCompact: {
     backgroundColor: "#4285f4",
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
