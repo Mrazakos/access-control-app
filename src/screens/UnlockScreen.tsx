@@ -16,6 +16,7 @@ import { CameraView, Camera } from "expo-camera";
 import { useCustomAlert } from "../components/CustomAlert";
 import {
   AccessCredential,
+  QrCodeCredential,
   useVerifiableCredentials,
 } from "../hooks/useVerifiableCredentials";
 import { useCall } from "wagmi";
@@ -99,7 +100,7 @@ export default function UnlockScreen() {
 
     try {
       // Parse the QR code data
-      const credential = JSON.parse(data);
+      const credential = JSON.parse(data) as QrCodeCredential;
 
       // Validate that it's a proper credential object
       if (!credential.id || !credential.lockId || !credential.signature) {
