@@ -66,7 +66,7 @@ export default function VerifiableCredentialsScreen({
   const [qrValue, setQrValue] = useState<string>("");
   const [qrExpiresAt, setQrExpiresAt] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const qrCodeRef = useRef<any>(null);
+  const qrCodeRef = useRef<View>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Filter credentials for this specific lock
