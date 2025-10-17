@@ -23,6 +23,7 @@ import {
   CredentialRequest,
   IssuedCredential,
   CredentialType,
+  QrCodeCredential,
 } from "../hooks/useVerifiableCredentials";
 import { Lock } from "../services/LockService";
 import { UserMetaData } from "../types/types";
@@ -234,7 +235,7 @@ export default function VerifiableCredentialsScreen({
       expirationDate: credential.expirationDate,
       issuanceDate: credential.issuanceDate,
       qrExpiresAt: expiresAt.toISOString(),
-    };
+    } as QrCodeCredential;
 
     setQrValue(JSON.stringify(shareableCredential));
     setSelectedCredential(credential);

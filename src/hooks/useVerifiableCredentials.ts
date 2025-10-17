@@ -34,6 +34,10 @@ export interface AccessCredential extends TypedVerifiableCredential {
   // userMetaDataHash is already in base VerifiableCredential
 }
 
+export interface QrCodeCredential extends AccessCredential {
+  qrExpiresAt: string; // ISO string
+}
+
 export interface RevokeSignatureRequest {
   lockId: number;
   signature: string;
@@ -241,7 +245,8 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
         // Create an access credential (only stores userMetaDataHash)
         // Remove qrExpiresAt before storing as it's only for QR validation
-        const { qrExpiresAt, ...credentialWithoutQrData } = credential as any;
+        const { qrExpiresAt, ...credentialWithoutQrData } =
+          credential as QrCodeCredential;
         const accessCredential: AccessCredential = {
           ...credentialWithoutQrData,
           type: CredentialType.ACCESS,
