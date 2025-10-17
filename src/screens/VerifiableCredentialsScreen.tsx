@@ -449,8 +449,7 @@ export default function VerifiableCredentialsScreen({
               <View style={styles.expirationInfo}>
                 <Ionicons name="warning-outline" size={16} color="#fbbc04" />
                 <Text style={styles.expirationText}>
-                  Handle this QR code with care • Users with access to it have
-                  access to the lock, while the credential is not revoked!
+                  Handle this QR code with care. Anyone with access to it can access the lock until the credential is revoked.
                 </Text>
               </View>
             </View>
