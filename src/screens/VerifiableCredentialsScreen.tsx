@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,14 +16,15 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import { useCustomAlert } from "../components/CustomAlert";
 import {
   useVerifiableCredentials,
   CredentialRequest,
   IssuedCredential,
+  CredentialType,
 } from "../hooks/useVerifiableCredentials";
 import { Lock } from "../services/LockService";
-import { VerifiableCredential } from "../types/types";
 import { UserMetaData } from "../types/types";
 
 interface VerifiableCredentialsScreenProps {
@@ -42,7 +43,6 @@ export default function VerifiableCredentialsScreen({
     isLoading,
     error,
     revokeIssuedCredential,
-    receiveAccessCredential,
   } = useVerifiableCredentials();
 
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -59,6 +59,16 @@ export default function VerifiableCredentialsScreen({
     expirationDate: "",
   });
 
+  // Share modal states
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedCredential, setSelectedCredential] =
+    useState<IssuedCredential | null>(null);
+  const [qrValue, setQrValue] = useState<string>("");
+  const [qrExpiresAt, setQrExpiresAt] = useState<Date | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const qrCodeRef = useRef<any>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Filter credentials for this specific lock
   const [lockCredentials, setLockCredentials] = useState<IssuedCredential[]>(
     []
@@ -67,6 +77,43 @@ export default function VerifiableCredentialsScreen({
   useEffect(() => {
     loadCredentials();
   }, [lock.id, issuedCredentials]);
+
+  // Timer effect for QR code expiration countdown
+  useEffect(() => {
+    if (showShareModal && qrExpiresAt) {
+      // Start countdown timer
+      timerRef.current = setInterval(() => {
+        const now = new Date();
+        const remaining = Math.floor(
+          (qrExpiresAt.getTime() - now.getTime()) / 1000
+        );
+
+        if (remaining <= 0) {
+          // QR code expired
+          setTimeRemaining(0);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+          }
+          setShowShareModal(false);
+          showAlert({
+            title: "QR Code Expired",
+            message: "This QR code has expired. Generate a new one to share.",
+            icon: "time-outline",
+            iconColor: "#fbbc04",
+            buttons: [{ text: "OK" }],
+          });
+        } else {
+          setTimeRemaining(remaining);
+        }
+      }, 1000);
+
+      return () => {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+      };
+    }
+  }, [showShareModal, qrExpiresAt]);
 
   const loadCredentials = async () => {
     try {
@@ -166,39 +213,34 @@ export default function VerifiableCredentialsScreen({
     });
   };
 
-  const handleShare = async (credential: any) => {
-    try {
-      // Convert the issued credential to a basic VerifiableCredential (without userMetaData)
-      const accessCredential: VerifiableCredential = {
-        signedMessageHash: credential.signedMessageHash,
-        lockId: credential.lockId,
-        lockNickname: credential.lockNickname,
-        signature: credential.signature,
-        userDataHash: credential.userDataHash,
-        expirationDate: credential.expirationDate,
-        issuanceDate: credential.issuanceDate,
-        id: credential.id,
-      };
+  const formatTimeRemaining = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
 
-      // Save as access credential
-      await receiveAccessCredential(accessCredential);
+  const handleShare = (credential: IssuedCredential) => {
+    // Set QR code expiration to 10 minutes from now
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-      showAlert({
-        title: "Success",
-        message: "Credential saved as access credential!",
-        icon: "checkmark-circle",
-        iconColor: "#34a853",
-        buttons: [{ text: "OK" }],
-      });
-    } catch (error) {
-      showAlert({
-        title: "Error",
-        message: `Failed to save credential: ${error}`,
-        icon: "alert-circle",
-        iconColor: "#ea4335",
-        buttons: [{ text: "OK" }],
-      });
-    }
+    const shareableCredential = {
+      id: credential.id,
+      type: CredentialType.ACCESS,
+      lockId: credential.lockId,
+      lockNickname: credential.lockNickname,
+      signature: credential.signature,
+      signedMessageHash: credential.signedMessageHash,
+      userDataHash: credential.userDataHash,
+      expirationDate: credential.expirationDate,
+      issuanceDate: credential.issuanceDate,
+      qrExpiresAt: expiresAt.toISOString(),
+    };
+
+    setQrValue(JSON.stringify(shareableCredential));
+    setSelectedCredential(credential);
+    setQrExpiresAt(expiresAt);
+    setTimeRemaining(10 * 60); // 10 minutes in seconds
+    setShowShareModal(true);
   };
 
   const renderCredentialItem = ({ item: credential }: { item: any }) => (
@@ -349,6 +391,83 @@ export default function VerifiableCredentialsScreen({
     </Modal>
   );
 
+  const renderShareModal = () => (
+    <Modal
+      visible={showShareModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowShareModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={() => setShowShareModal(false)}
+        />
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHandle} />
+
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Share Access Credential</Text>
+            <Text style={styles.modalSubtitle}>
+              For {selectedCredential?.userMetaData?.name || "user"}
+            </Text>
+          </View>
+
+          {/* QR Code Content */}
+          <View style={styles.tabContent}>
+            <View style={styles.qrContainer}>
+              <View
+                style={styles.qrWrapper}
+                ref={qrCodeRef}
+                collapsable={false}
+              >
+                <QRCode value={qrValue} size={250} backgroundColor="white" />
+              </View>
+              <Text style={styles.qrHelpText}>
+                Show this QR code to the recipient or take a screenshot to share
+              </Text>
+
+              {/* Countdown Timer */}
+              <View style={styles.timerContainer}>
+                <Ionicons
+                  name="time-outline"
+                  size={20}
+                  color={timeRemaining < 60 ? "#ea4335" : "#4285f4"}
+                />
+                <Text
+                  style={[
+                    styles.timerText,
+                    timeRemaining < 60 && styles.timerTextUrgent,
+                  ]}
+                >
+                  Expires in {formatTimeRemaining(timeRemaining)}
+                </Text>
+              </View>
+
+              <View style={styles.expirationInfo}>
+                <Ionicons name="warning-outline" size={16} color="#fbbc04" />
+                <Text style={styles.expirationText}>
+                  Handle this QR code with care • Users with access to it have
+                  access to the lock, while the credential is not revoked!
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelActionButton}
+              onPress={() => setShowShareModal(false)}
+            >
+              <Text style={styles.cancelActionText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#202124" />
@@ -397,6 +516,9 @@ export default function VerifiableCredentialsScreen({
 
       {/* Form Modal */}
       {renderFormModal()}
+
+      {/* Share Modal */}
+      {renderShareModal()}
 
       {/* Alert Component */}
       <AlertComponent />
@@ -569,8 +691,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#202124",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "80%",
-    minHeight: "50%",
+    height: "90%",
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.25,
@@ -671,6 +792,130 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   primaryActionText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  // Share Modal Styles
+  tabContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#3c4043",
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 8,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: "#4285f4",
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#9aa0a6",
+  },
+  activeTabText: {
+    color: "#4285f4",
+  },
+  tabContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
+  qrContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrWrapper: {
+    padding: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  qrHelpText: {
+    fontSize: 14,
+    color: "#9aa0a6",
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  timerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(66, 133, 244, 0.1)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  timerText: {
+    fontSize: 16,
+    color: "#4285f4",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+  },
+  timerTextUrgent: {
+    color: "#ea4335",
+  },
+  expirationInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(251, 188, 4, 0.1)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  expirationText: {
+    fontSize: 12,
+    color: "#fbbc04",
+    fontWeight: "500",
+  },
+  sendContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  sendTitle: {
+    fontSize: 20,
+    fontWeight: "500",
+    color: "#ffffff",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sendDescription: {
+    fontSize: 14,
+    color: "#9aa0a6",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+    paddingHorizontal: 20,
+  },
+  shareQRButton: {
+    backgroundColor: "#4285f4",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: "#4285f4",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  shareQRButtonText: {
     color: "#ffffff",
     fontWeight: "600",
     fontSize: 16,

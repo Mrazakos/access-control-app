@@ -227,9 +227,23 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(true);
         setError(null);
 
+        // Check if QR code has expired (if qrExpiresAt is present)
+        if ("qrExpiresAt" in credential && credential.qrExpiresAt) {
+          const expiresAt = new Date(credential.qrExpiresAt as string);
+          const now = new Date();
+
+          if (expiresAt < now) {
+            throw new Error(
+              "This QR code has expired. Please request a new one from the lock owner."
+            );
+          }
+        }
+
         // Create an access credential (only stores userMetaDataHash)
+        // Remove qrExpiresAt before storing as it's only for QR validation
+        const { qrExpiresAt, ...credentialWithoutQrData } = credential as any;
         const accessCredential: AccessCredential = {
-          ...credential,
+          ...credentialWithoutQrData,
           type: CredentialType.ACCESS,
           // Note: Only userMetaDataHash is stored, not full userMetaData
         };
