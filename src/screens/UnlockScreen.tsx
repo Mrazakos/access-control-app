@@ -193,7 +193,7 @@ export default function UnlockScreen() {
         />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by lock name or ID..."
+          placeholder="Search by lock"
           placeholderTextColor="#9aa0a6"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -333,59 +333,62 @@ export default function UnlockScreen() {
         visible={showQrScanner}
         animationType="slide"
         onRequestClose={handleCloseQrScanner}
+        transparent={true}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Scan QR Code</Text>
-            <TouchableOpacity
-              onPress={handleCloseQrScanner}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.cameraContainer}>
-            {hasPermission === null ? (
-              <View style={styles.permissionContainer}>
-                <Ionicons name="camera" size={48} color="#9aa0a6" />
-                <Text style={styles.permissionText}>
-                  Requesting camera permission...
-                </Text>
-              </View>
-            ) : hasPermission === false ? (
-              <View style={styles.permissionContainer}>
-                <Ionicons name="warning" size={48} color="#ea4335" />
-                <Text style={styles.permissionText}>
-                  Camera permission denied
-                </Text>
-                <Text style={styles.permissionSubtext}>
-                  Please enable camera access in your device settings
-                </Text>
-              </View>
-            ) : (
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-                barcodeScannerSettings={{
-                  barcodeTypes: ["qr"],
-                }}
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Scan QR Code</Text>
+              <TouchableOpacity
+                onPress={handleCloseQrScanner}
+                style={styles.closeButton}
               >
-                <View style={styles.scannerOverlay}>
-                  <View style={styles.scannerFrame} />
-                  <Text style={styles.scannerText}>
-                    {scanned ? "Processing..." : "Align QR code within frame"}
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.cameraContainer}>
+              {hasPermission === null ? (
+                <View style={styles.permissionContainer}>
+                  <Ionicons name="camera" size={48} color="#9aa0a6" />
+                  <Text style={styles.permissionText}>
+                    Requesting camera permission...
                   </Text>
                 </View>
-              </CameraView>
-            )}
-          </View>
+              ) : hasPermission === false ? (
+                <View style={styles.permissionContainer}>
+                  <Ionicons name="warning" size={48} color="#ea4335" />
+                  <Text style={styles.permissionText}>
+                    Camera permission denied
+                  </Text>
+                  <Text style={styles.permissionSubtext}>
+                    Please enable camera access in your device settings
+                  </Text>
+                </View>
+              ) : (
+                <CameraView
+                  style={styles.camera}
+                  facing="back"
+                  onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ["qr"],
+                  }}
+                >
+                  <View style={styles.scannerOverlay}>
+                    <View style={styles.scannerFrame} />
+                    <Text style={styles.scannerText}>
+                      {scanned ? "Processing..." : "Align QR code within frame"}
+                    </Text>
+                  </View>
+                </CameraView>
+              )}
+            </View>
 
-          <View style={styles.modalFooter}>
-            <Text style={styles.footerText}>
-              Scan the QR code provided by the lock owner to gain access
-            </Text>
+            <View style={styles.modalFooter}>
+              <Text style={styles.footerText}>
+                Scan the QR code provided by the lock owner to gain access
+              </Text>
+            </View>
           </View>
         </View>
       </Modal>
@@ -563,9 +566,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   // QR Scanner Modal Styles
-  modalContainer: {
+  modalBackdrop: {
     flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    height: "90%",
     backgroundColor: "#1f1f1f",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
   },
   modalHeader: {
     flexDirection: "row",
@@ -620,11 +631,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scannerFrame: {
-    width: 250,
-    height: 250,
-    borderWidth: 2,
+    width: 300,
+    height: 300,
+    borderWidth: 3,
     borderColor: "#34a853",
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: "transparent",
   },
   scannerText: {

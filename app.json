@@ -29,7 +29,12 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-barcode-scanner"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for access credentials."
+        }
+      ]
     ],
     "extra": {
       "eas": {

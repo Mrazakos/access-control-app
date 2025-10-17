@@ -23,7 +23,6 @@
     "@walletconnect/utils": "^2.16.1",
     "ethers": "^6.15.0",
     "expo": "~54.0.11",
-    "expo-barcode-scanner": "^13.0.1",
     "expo-camera": "~17.0.8",
     "expo-dev-client": "~6.0.13",
     "expo-status-bar": "~3.0.8",
