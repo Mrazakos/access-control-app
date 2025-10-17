@@ -7,9 +7,12 @@ import {
   ScrollView,
   TextInput,
   StatusBar,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { CameraView, Camera } from "expo-camera";
 import { useCustomAlert } from "../components/CustomAlert";
 import {
   AccessCredential,
@@ -27,9 +30,13 @@ export default function UnlockScreen() {
     isCredentialExpired,
     deleteAccessCredential,
     refreshAccessCredentials,
+    receiveAccessCredential,
   } = useVerifiableCredentials();
   const { showAlert, AlertComponent } = useCustomAlert();
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanned, setScanned] = useState(false);
 
   // Refresh credentials every time the screen comes into focus
   useFocusEffect(
@@ -38,6 +45,113 @@ export default function UnlockScreen() {
       refreshAccessCredentials();
     }, [refreshAccessCredentials])
   );
+
+  // Request camera permissions
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === "granted");
+    })();
+  }, []);
+
+  const handleOpenQrScanner = () => {
+    if (hasPermission === null) {
+      showAlert({
+        title: "Camera Permission",
+        message: "Requesting camera permission...",
+        icon: "camera",
+        iconColor: "#4285f4",
+        buttons: [{ text: "OK", style: "default" }],
+      });
+      return;
+    }
+
+    if (hasPermission === false) {
+      showAlert({
+        title: "Camera Permission Denied",
+        message:
+          "Please enable camera access in your device settings to scan QR codes.",
+        icon: "warning",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK", style: "default" }],
+      });
+      return;
+    }
+
+    setScanned(false);
+    setShowQrScanner(true);
+  };
+
+  const handleCloseQrScanner = () => {
+    setShowQrScanner(false);
+    setScanned(false);
+  };
+
+  const handleBarCodeScanned = async ({
+    data,
+  }: {
+    type: string;
+    data: string;
+  }) => {
+    if (scanned) return;
+
+    setScanned(true);
+
+    try {
+      // Parse the QR code data
+      const credential = JSON.parse(data);
+
+      // Validate that it's a proper credential object
+      if (!credential.id || !credential.lockId || !credential.signature) {
+        throw new Error("Invalid QR code format");
+      }
+
+      // Try to receive the credential
+      await receiveAccessCredential(credential);
+
+      // Show success alert
+      showAlert({
+        title: "Success",
+        message: `Access credential for ${
+          credential.lockNickname || "Lock"
+        } has been added successfully!`,
+        icon: "checkmark-circle",
+        iconColor: "#34a853",
+        buttons: [
+          {
+            text: "OK",
+            style: "default",
+            onPress: () => {
+              handleCloseQrScanner();
+              refreshAccessCredentials();
+            },
+          },
+        ],
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Invalid QR code";
+
+      showAlert({
+        title: "Error",
+        message: errorMessage,
+        icon: "close-circle",
+        iconColor: "#ea4335",
+        buttons: [
+          {
+            text: "Try Again",
+            style: "default",
+            onPress: () => setScanned(false),
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: handleCloseQrScanner,
+          },
+        ],
+      });
+    }
+  };
 
   const handleUnlock = async (credentialId: string) => {
     setUnlockingId(credentialId);
@@ -89,6 +203,9 @@ export default function UnlockScreen() {
             <Ionicons name="close-circle" size={20} color="#9aa0a6" />
           </TouchableOpacity>
         )}
+        <TouchableOpacity onPress={handleOpenQrScanner} style={styles.qrButton}>
+          <Ionicons name="qr-code" size={20} color="#34a853" />
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => refreshAccessCredentials()}
           style={styles.refreshButton}
@@ -210,6 +327,69 @@ export default function UnlockScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* QR Code Scanner Modal */}
+      <Modal
+        visible={showQrScanner}
+        animationType="slide"
+        onRequestClose={handleCloseQrScanner}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Scan QR Code</Text>
+            <TouchableOpacity
+              onPress={handleCloseQrScanner}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.cameraContainer}>
+            {hasPermission === null ? (
+              <View style={styles.permissionContainer}>
+                <Ionicons name="camera" size={48} color="#9aa0a6" />
+                <Text style={styles.permissionText}>
+                  Requesting camera permission...
+                </Text>
+              </View>
+            ) : hasPermission === false ? (
+              <View style={styles.permissionContainer}>
+                <Ionicons name="warning" size={48} color="#ea4335" />
+                <Text style={styles.permissionText}>
+                  Camera permission denied
+                </Text>
+                <Text style={styles.permissionSubtext}>
+                  Please enable camera access in your device settings
+                </Text>
+              </View>
+            ) : (
+              <CameraView
+                style={styles.camera}
+                facing="back"
+                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ["qr"],
+                }}
+              >
+                <View style={styles.scannerOverlay}>
+                  <View style={styles.scannerFrame} />
+                  <Text style={styles.scannerText}>
+                    {scanned ? "Processing..." : "Align QR code within frame"}
+                  </Text>
+                </View>
+              </CameraView>
+            )}
+          </View>
+
+          <View style={styles.modalFooter}>
+            <Text style={styles.footerText}>
+              Scan the QR code provided by the lock owner to gain access
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       <AlertComponent />
     </View>
   );
@@ -241,6 +421,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "400",
+  },
+  qrButton: {
+    marginLeft: 12,
+    padding: 4,
   },
   refreshButton: {
     marginLeft: 12,
@@ -377,5 +561,94 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
     fontSize: 14,
+  },
+  // QR Scanner Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#1f1f1f",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#2a2d32",
+    borderBottomWidth: 1,
+    borderBottomColor: "#3c4043",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  camera: {
+    flex: 1,
+  },
+  permissionContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    backgroundColor: "#1f1f1f",
+  },
+  permissionText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 16,
+  },
+  permissionSubtext: {
+    color: "#9aa0a6",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  scannerOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scannerFrame: {
+    width: 250,
+    height: 250,
+    borderWidth: 2,
+    borderColor: "#34a853",
+    borderRadius: 12,
+    backgroundColor: "transparent",
+  },
+  scannerText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 24,
+    paddingHorizontal: 32,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  modalFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: "#2a2d32",
+    borderTopWidth: 1,
+    borderTopColor: "#3c4043",
+  },
+  footerText: {
+    color: "#9aa0a6",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
 });
