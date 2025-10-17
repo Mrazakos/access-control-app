@@ -861,7 +861,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#4285f4",
     fontWeight: "600",
-    fontVariant: ["tabular-nums"],
   },
   timerTextUrgent: {
     color: "#ea4335",
