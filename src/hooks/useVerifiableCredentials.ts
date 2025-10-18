@@ -189,6 +189,16 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         // Sign the VC input
         const signingResult = await CryptoUtils.sign(vcInput, request.privK);
 
+        // Guard: Ensure both signature and signedMessageHash are present
+        if (
+          !signingResult ||
+          !signingResult.signature ||
+          !signingResult.signedMessageHash
+        ) {
+          throw new Error(
+            "Failed to sign verifiable credential: missing signature or signedMessageHash"
+          );
+        }
         // Create the issued credential with full userMetaData
         const issuedCredential: IssuedCredential = {
           id: credentialId,
