@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { KeyPair, VerifiableCredential } from "../types/types";
+import { KeyPair, VCSigningInput, SigningResult } from "../types/types";
 
 /**
  * FAST Crypto Utils using ECDSA (secp256k1)
@@ -29,20 +29,29 @@ export class CryptoUtils {
   }
 
   /**
-   * Signs data hash with ECDSA - Signs the hash, not the original data
+   * Signs a Verifiable Credential input with ECDSA
+   * Signs the hash of the VC data (userMetaDataHash + issuanceDate + expirationDate)
+   * @param vcInput - The VC signing input containing userMetaDataHash, issuanceDate, and expirationDate
+   * @param privateKey - The ECDSA private key to sign with
+   * @returns SigningResult containing the signature and the hash that was signed
    */
   static async sign(
-    data: string | object,
+    vcInput: VCSigningInput,
     privateKey: string
-  ): Promise<Partial<VerifiableCredential>> {
+  ): Promise<SigningResult> {
     try {
-      // Step 1: Convert data to string and create hash
-      const dataString = typeof data === "string" ? data : JSON.stringify(data);
-      const dataHash = ethers.keccak256(ethers.toUtf8Bytes(dataString));
+      // Step 1: Create a canonical message from the VC input
+      const message = JSON.stringify({
+        userMetaDataHash: vcInput.userMetaDataHash,
+        issuanceDate: vcInput.issuanceDate,
+        expirationDate: vcInput.expirationDate || null,
+      });
 
+      // Step 2: Hash the message
+      const dataHash = ethers.keccak256(ethers.toUtf8Bytes(message));
       console.log(`📝 Data hash: ${dataHash}`);
 
-      // Step 2: Sign the hash (not the original data)
+      // Step 3: Sign the hash
       const wallet = new ethers.Wallet(privateKey);
 
       // Convert hash to bytes and sign it
@@ -125,16 +134,26 @@ export class CryptoUtils {
         `⚡ Key generation: ${perfEnd - perfStart}ms (was 30s-5min!)`
       );
 
-      const testData = "Hello, fast ECDSA world!";
+      // Create test VC input
+      const testUserData = { email: "test@example.com", name: "Test User" };
+      const userMetaDataHash = this.hash(JSON.stringify(testUserData));
 
-      const signResult = await this.sign(testData, keyPair.privateKey);
+      const testVCInput: VCSigningInput = {
+        userMetaDataHash: userMetaDataHash,
+        issuanceDate: new Date().toISOString(),
+        expirationDate: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ).toISOString(), // 30 days
+      };
+
+      const signResult = await this.sign(testVCInput, keyPair.privateKey);
       results.push("✅ Signing completed");
       results.push(`📝 Data hash: ${signResult.signedMessageHash}`);
 
       // Test proper hash-based verification
       const isValid = this.verify(
-        signResult.signedMessageHash!, // Use the hash, not original data
-        signResult.signature!,
+        signResult.signedMessageHash,
+        signResult.signature,
         keyPair.publicKey
       );
 

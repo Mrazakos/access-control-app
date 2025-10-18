@@ -159,7 +159,6 @@ export default function VerifiableCredentialsScreen({
       const userMetaData: UserMetaData = {
         email: formData.email.trim(),
         name: formData.name.trim(),
-        timeStamp: new Date(),
       };
 
       const request: CredentialRequest = {

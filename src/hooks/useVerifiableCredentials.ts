@@ -5,7 +5,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { v4 as uuidv4 } from "uuid";
 import { CryptoUtils } from "../utils/CryptoUtils";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
-import { VerifiableCredential, UserMetaData } from "../types/types";
+import {
+  VerifiableCredential,
+  UserMetaData,
+  VCSigningInput,
+} from "../types/types";
 
 // Contract configuration
 const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
@@ -169,34 +173,28 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         const issuanceDate = new Date().toISOString();
 
         // Hash the user data for privacy (user data won't be revealed)
-        const userDataHash = CryptoUtils.hash(
+        const userMetaDataHash = CryptoUtils.hash(
           JSON.stringify(request.userMetaData)
         );
 
-        // Sign a message containing the user data hash + expiration date
-        // This way user data stays private but expiration is cryptographically protected
-        const message = JSON.stringify({
-          userDataHash: userDataHash,
-          expirationDate: request.expirationDate || null,
-        });
-        const vc = await CryptoUtils.sign(message, request.privK);
+        // Create VC signing input
+        const vcInput: VCSigningInput = {
+          userMetaDataHash: userMetaDataHash,
+          issuanceDate: issuanceDate,
+          expirationDate: request.expirationDate,
+        };
 
-        if (!vc.signature) {
-          throw new Error("Failed to generate credential signature");
-        }
-
-        if (!vc.signature || !vc.signedMessageHash) {
-          throw new Error("Failed to generate credential signature or hash");
-        }
+        // Sign the VC input
+        const signingResult = await CryptoUtils.sign(vcInput, request.privK);
 
         // Create the issued credential with full userMetaData
         const issuedCredential: IssuedCredential = {
           id: credentialId,
           lockId: request.lockId,
-          signedMessageHash: vc.signedMessageHash,
+          signedMessageHash: signingResult.signedMessageHash,
           lockNickname: request.lockNickname,
-          signature: vc.signature,
-          userDataHash: userDataHash, // Include the hash for verification
+          signature: signingResult.signature,
+          userDataHash: userMetaDataHash, // Include the hash for verification
           issuanceDate: issuanceDate,
           expirationDate: request.expirationDate,
           type: CredentialType.ISSUED,
