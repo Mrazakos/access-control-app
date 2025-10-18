@@ -204,7 +204,12 @@ export default function UnlockScreen() {
             <Ionicons name="close-circle" size={20} color="#9aa0a6" />
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={handleOpenQrScanner} style={styles.qrButton}>
+        <TouchableOpacity
+          onPress={handleOpenQrScanner}
+          style={styles.qrButton}
+          accessibilityRole="button"
+          accessibilityLabel="Scan QR code to add access credential"
+        >
           <Ionicons name="qr-code" size={20} color="#34a853" />
         </TouchableOpacity>
         <TouchableOpacity
