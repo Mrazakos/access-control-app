@@ -33,6 +33,9 @@ const metadata = {
 
 const chains = [mainnet, sepolia] as const;
 
+// Select default chain based on environment configuration
+const defaultChain = environment.isDevMode ? sepolia : mainnet;
+
 const wagmiConfig = defaultWagmiConfig({ chains, projectId, metadata });
 
 // Initialize AppKit only once globally
@@ -42,12 +45,14 @@ if (!global.__WALLETCONNECT_INITIALIZED__) {
       projectId,
       metadata,
       wagmiConfig,
-      defaultChain: sepolia,
+      defaultChain,
       enableAnalytics: true,
       themeMode: "dark",
     });
     global.__WALLETCONNECT_INITIALIZED__ = true;
-    console.log("✅ WalletConnect AppKit initialized");
+    console.log(
+      `✅ WalletConnect AppKit initialized (${environment.isDevMode ? "DEV" : "PROD"} mode - ${environment.network.chainName})`
+    );
   } catch (error) {
     console.warn("⚠️ WalletConnect initialization error:", error);
   }

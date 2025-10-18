@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CryptoUtils } from "../utils/CryptoUtils";
-import { Address } from "../types/types";
+import { CryptoUtils } from "@mrazakos/vc-ecdsa-crypto";
 
 export type LockStatus = "syncing" | "active" | "inactive" | "failed";
 

@@ -3,17 +3,19 @@ import { useWriteContract, useAccount } from "wagmi";
 import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { v4 as uuidv4 } from "uuid";
-import { CryptoUtils } from "../utils/CryptoUtils";
+import { CryptoUtils } from "@mrazakos/vc-ecdsa-crypto";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
-import {
-  VerifiableCredential,
-  UserMetaData,
-  VCSigningInput,
-} from "../types/types";
+import { VerifiableCredential, UserMetaData } from "../types/types";
+import { VCSigningInput } from "@mrazakos/vc-ecdsa-crypto";
+import { environment } from "../config/environment";
 
-// Contract configuration
-const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
+// Contract configuration - uses environment-based contract address
+const CONTRACT_ADDRESS = (environment.network.contractAddress ||
   "0x5FbDB2315678afecb367f032d93F642f64180aa3") as ViemAddress;
+
+console.log(
+  `📝 Using contract address: ${CONTRACT_ADDRESS} (${environment.network.chainName})`
+);
 
 // 📋 Credential Types
 export enum CredentialType {
