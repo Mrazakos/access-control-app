@@ -68,7 +68,7 @@ export interface UseVerifiableCredentialsReturn {
   filteredAccessCredentials: AccessCredential[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  receiveAccessCredential: (credential: VerifiableCredential) => Promise<void>;
+  receiveAccessCredential: (credential: QrCodeCredential) => Promise<void>;
   getAccessCredentials: () => Promise<AccessCredential[]>;
   getValidAccessCredentials: () => Promise<AccessCredential[]>;
   getAccessCredentialsByLockId: (lockId: number) => Promise<AccessCredential[]>;
@@ -226,13 +226,13 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
   // 🚪 Receive an access credential (stores only userMetaDataHash)
   const receiveAccessCredential = useCallback(
-    async (credential: VerifiableCredential): Promise<void> => {
+    async (credential: QrCodeCredential): Promise<void> => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Check if QR code has expired (if qrExpiresAt is present)
-        if ("qrExpiresAt" in credential && credential.qrExpiresAt) {
+        // Check if QR code has expired
+        if (credential.qrExpiresAt) {
           const expiresAt = new Date(credential.qrExpiresAt as string);
           const now = new Date();
 
@@ -245,12 +245,10 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
         // Create an access credential (only stores userMetaDataHash)
         // Remove qrExpiresAt before storing as it's only for QR validation
-        const { qrExpiresAt, ...credentialWithoutQrData } =
-          credential as QrCodeCredential;
+        const { qrExpiresAt, ...credentialWithoutQrData } = credential;
         const accessCredential: AccessCredential = {
           ...credentialWithoutQrData,
           type: CredentialType.ACCESS,
-          // Note: Only userMetaDataHash is stored, not full userMetaData
         };
 
         // Check if credential already exists
