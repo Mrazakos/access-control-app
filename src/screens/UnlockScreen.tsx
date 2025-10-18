@@ -348,6 +348,8 @@ export default function UnlockScreen() {
               <TouchableOpacity
                 onPress={handleCloseQrScanner}
                 style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close scanner"
               >
                 <Ionicons name="close" size={28} color="#fff" />
               </TouchableOpacity>
