@@ -9,11 +9,16 @@ import { Address as ViemAddress } from "viem";
 import { ethers } from "ethers";
 import { LockService, Lock, CreateLockRequest } from "../services/LockService";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
-import { Address } from "../types/types";
+import { Address } from "@mrazakos/vc-ecdsa-crypto";
+import { environment } from "../config/environment";
 
-// Contract configuration
-const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
+// Contract configuration - uses environment-based contract address
+const CONTRACT_ADDRESS = (environment.network.contractAddress ||
   "0x5FbDB2315678afecb367f032d93F642f64180aa3") as ViemAddress;
+
+console.log(
+  `🔐 Using contract address: ${CONTRACT_ADDRESS} (${environment.network.chainName})`
+);
 
 export interface LockRegistrationResult {
   lockId: number;

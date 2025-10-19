@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.26.0",
+    "@mrazakos/vc-ecdsa-crypto": "^1.1.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^7.4.7",

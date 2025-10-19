@@ -3,13 +3,19 @@ import { useWriteContract, useAccount } from "wagmi";
 import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { v4 as uuidv4 } from "uuid";
-import { CryptoUtils } from "../utils/CryptoUtils";
+import { CryptoUtils } from "@mrazakos/vc-ecdsa-crypto";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { VerifiableCredential, UserMetaData } from "../types/types";
+import { VCSigningInput } from "@mrazakos/vc-ecdsa-crypto";
+import { environment } from "../config/environment";
 
-// Contract configuration
-const CONTRACT_ADDRESS = (process.env.EXPO_PUBLIC_CONTRACT_ADDRESS ||
+// Contract configuration - uses environment-based contract address
+const CONTRACT_ADDRESS = (environment.network.contractAddress ||
   "0x5FbDB2315678afecb367f032d93F642f64180aa3") as ViemAddress;
+
+console.log(
+  `📝 Using contract address: ${CONTRACT_ADDRESS} (${environment.network.chainName})`
+);
 
 // 📋 Credential Types
 export enum CredentialType {
@@ -169,34 +175,38 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         const issuanceDate = new Date().toISOString();
 
         // Hash the user data for privacy (user data won't be revealed)
-        const userDataHash = CryptoUtils.hash(
+        const userMetaDataHash = CryptoUtils.hash(
           JSON.stringify(request.userMetaData)
         );
 
-        // Sign a message containing the user data hash + expiration date
-        // This way user data stays private but expiration is cryptographically protected
-        const message = JSON.stringify({
-          userDataHash: userDataHash,
-          expirationDate: request.expirationDate || null,
-        });
-        const vc = await CryptoUtils.sign(message, request.privK);
+        // Create VC signing input
+        const vcInput: VCSigningInput = {
+          userMetaDataHash: userMetaDataHash,
+          issuanceDate: issuanceDate,
+          expirationDate: request.expirationDate,
+        };
 
-        if (!vc.signature) {
-          throw new Error("Failed to generate credential signature");
+        // Sign the VC input
+        const signingResult = await CryptoUtils.sign(vcInput, request.privK);
+
+        // Guard: Ensure both signature and signedMessageHash are present
+        if (
+          !signingResult ||
+          !signingResult.signature ||
+          !signingResult.signedMessageHash
+        ) {
+          throw new Error(
+            "Failed to sign verifiable credential: missing signature or signedMessageHash"
+          );
         }
-
-        if (!vc.signature || !vc.signedMessageHash) {
-          throw new Error("Failed to generate credential signature or hash");
-        }
-
         // Create the issued credential with full userMetaData
         const issuedCredential: IssuedCredential = {
           id: credentialId,
           lockId: request.lockId,
-          signedMessageHash: vc.signedMessageHash,
+          signedMessageHash: signingResult.signedMessageHash,
           lockNickname: request.lockNickname,
-          signature: vc.signature,
-          userDataHash: userDataHash, // Include the hash for verification
+          signature: signingResult.signature,
+          userDataHash: userMetaDataHash, // Include the hash for verification
           issuanceDate: issuanceDate,
           expirationDate: request.expirationDate,
           type: CredentialType.ISSUED,
