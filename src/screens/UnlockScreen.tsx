@@ -102,9 +102,17 @@ export default function UnlockScreen() {
       // Parse the QR code data
       const credential = JSON.parse(data) as QrCodeCredential;
 
-      // Validate that it's a proper credential object
-      if (!credential.id || !credential.lockId || !credential.signature) {
-        throw new Error("Invalid QR code format");
+      // Validate that it's a proper credential object with W3C VC structure
+      if (
+        !credential.id ||
+        !credential["@context"] ||
+        !credential.type ||
+        !credential.credentialSubject ||
+        !credential.proof
+      ) {
+        throw new Error(
+          "Invalid QR code format - missing required W3C VC fields"
+        );
       }
 
       // Try to receive the credential
@@ -275,9 +283,9 @@ export default function UnlockScreen() {
                   <View style={styles.expirationContainer}>
                     <Ionicons name="time-outline" size={14} color="#9aa0a6" />
                     <Text style={styles.expirationText}>
-                      {cred.expirationDate
+                      {cred.validUntil
                         ? `Expires ${new Date(
-                            cred.expirationDate
+                            cred.validUntil
                           ).toLocaleDateString("en-us", {
                             year: "numeric",
                             month: "short",

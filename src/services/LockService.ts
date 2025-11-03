@@ -1,15 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CryptoUtils } from "@mrazakos/vc-ecdsa-crypto";
+import { ECDSACryptoService, CryptoIdentity } from "@mrazakos/vc-ecdsa-crypto";
 
 export type LockStatus = "syncing" | "active" | "inactive" | "failed";
 
-export interface Lock {
+export interface Lock extends CryptoIdentity {
   id: number;
   name: string;
   description?: string;
   location?: string;
   publicKey: string;
   privateKey: string; // Stored locally only
+  address: string; // Ethereum address for the lock (NEW)
   createdAt: string; // ISO string
   status: LockStatus;
 }
@@ -43,9 +44,12 @@ export class LockService {
    */
   async createLock(request: CreateLockRequest): Promise<Lock> {
     try {
-      // Start key generation and storage read in parallel
-      const [keyPair, locks] = await Promise.all([
-        CryptoUtils.generateKeyPair(),
+      // Initialize crypto service
+      const crypto = new ECDSACryptoService();
+
+      // Start identity generation and storage read in parallel
+      const [identity, locks] = await Promise.all([
+        crypto.generateIdentity(),
         this.getStoredLocks(),
       ]);
 
@@ -57,8 +61,9 @@ export class LockService {
         name: request.name,
         description: request.description,
         location: request.location,
-        publicKey: keyPair.publicKey,
-        privateKey: keyPair.privateKey,
+        publicKey: identity.publicKey,
+        privateKey: identity.privateKey,
+        address: identity.address, // NEW: Store Ethereum address
         createdAt: new Date().toISOString(),
         status: "syncing", // Initial status is syncing until blockchain confirmation
       };
@@ -69,7 +74,9 @@ export class LockService {
       // Store the updated locks
       await AsyncStorage.setItem(LOCKS_STORAGE_KEY, JSON.stringify(locks));
 
-      console.log(`Created lock ${newId} locally`);
+      console.log(
+        `Created lock ${newId} locally with address ${identity.address}`
+      );
       return newLock;
     } catch (error) {
       console.error("Failed to create lock:", error);

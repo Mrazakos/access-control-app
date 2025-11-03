@@ -53,11 +53,11 @@ export default function VerifiableCredentialsScreen({
   const [formData, setFormData] = useState<{
     email: string;
     name: string;
-    expirationDate: string;
+    validUntil: string;
   }>({
     email: "",
     name: "",
-    expirationDate: "",
+    validUntil: "",
   });
 
   // Share modal states
@@ -128,7 +128,7 @@ export default function VerifiableCredentialsScreen({
   };
 
   const addCredential = () => {
-    setFormData({ email: "", name: "", expirationDate: "" });
+    setFormData({ email: "", name: "", validUntil: "" });
     setShowAddForm(true);
   };
 
@@ -165,8 +165,9 @@ export default function VerifiableCredentialsScreen({
         lockId: lock.id,
         lockNickname: lock.name,
         userMetaData,
+        pubk: lock.publicKey,
         privK: lock.privateKey, // Use lock's private key for signing
-        expirationDate: formData.expirationDate || undefined,
+        validUntil: formData.validUntil || undefined,
       };
 
       console.log("🚀 Issuing credential for lock:", lock.id);
@@ -223,18 +224,12 @@ export default function VerifiableCredentialsScreen({
     // Set QR code expiration to 10 minutes from now
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    const shareableCredential = {
-      id: credential.id,
-      type: CredentialType.ACCESS,
-      lockId: credential.lockId,
-      lockNickname: credential.lockNickname,
-      signature: credential.signature,
-      signedMessageHash: credential.signedMessageHash,
-      userDataHash: credential.userDataHash,
-      expirationDate: credential.expirationDate,
-      issuanceDate: credential.issuanceDate,
+    // Share the full W3C credential with QR expiration
+    const shareableCredential: QrCodeCredential = {
+      ...credential, // Spread all W3C fields
+      credentialType: CredentialType.ACCESS,
       qrExpiresAt: expiresAt.toISOString(),
-    } as QrCodeCredential;
+    };
 
     setQrValue(JSON.stringify(shareableCredential));
     setSelectedCredential(credential);
@@ -256,12 +251,11 @@ export default function VerifiableCredentialsScreen({
               {credential.userMetaData?.email || "No email"}
             </Text>
             <Text style={styles.credentialDate}>
-              Issued: {new Date(credential.issuanceDate).toLocaleDateString()}
+              Issued: {new Date(credential.validFrom).toLocaleDateString()}
             </Text>
-            {credential.expirationDate && (
+            {credential.validUntil && (
               <Text style={styles.credentialExpiry}>
-                Expires:{" "}
-                {new Date(credential.expirationDate).toLocaleDateString()}
+                Expires: {new Date(credential.validUntil).toLocaleDateString()}
               </Text>
             )}
           </View>
@@ -356,9 +350,9 @@ export default function VerifiableCredentialsScreen({
                     style={styles.textInput}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor="#5f6368"
-                    value={formData.expirationDate}
+                    value={formData.validUntil}
                     onChangeText={(text) =>
-                      setFormData({ ...formData, expirationDate: text })
+                      setFormData({ ...formData, validUntil: text })
                     }
                   />
                 </View>
@@ -448,7 +442,8 @@ export default function VerifiableCredentialsScreen({
               <View style={styles.expirationInfo}>
                 <Ionicons name="warning-outline" size={16} color="#fbbc04" />
                 <Text style={styles.expirationText}>
-                  Handle this QR code with care. Anyone with access to it can access the lock until the credential is revoked.
+                  Handle this QR code with care. Anyone with access to it can
+                  access the lock until the credential is revoked.
                 </Text>
               </View>
             </View>
@@ -507,7 +502,7 @@ export default function VerifiableCredentialsScreen({
         <FlatList
           data={lockCredentials}
           renderItem={renderCredentialItem}
-          keyExtractor={(item) => item.id || item.signature}
+          keyExtractor={(item) => item.id || `cred-${Date.now()}`}
           style={styles.credentialsList}
           showsVerticalScrollIndicator={false}
         />
