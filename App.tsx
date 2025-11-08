@@ -31,7 +31,7 @@ const metadata = {
   },
 };
 
-const chains = [mainnet, sepolia] as const;
+const chains = [sepolia] as const;
 
 // Select default chain based on environment configuration
 const defaultChain = environment.isDevMode ? sepolia : mainnet;

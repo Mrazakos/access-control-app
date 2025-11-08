@@ -76,6 +76,7 @@ export const useLock = (): UseLockReturn => {
   const [error, setError] = useState<string | null>(null);
   const [pendingRegistration, setPendingRegistration] = useState<{
     publicKey: string;
+    lockAddress: string;
     callback?: (result: LockRegistrationResult) => void;
     timeoutId?: NodeJS.Timeout;
   } | null>(null);
@@ -144,23 +145,23 @@ export const useLock = (): UseLockReturn => {
                 console.log("📋 Parsed log:", parsedLog?.name, parsedLog?.args);
 
                 if (parsedLog?.name === "LockRegistered") {
-                  const { lockId, owner, publicKey } = parsedLog.args;
+                  const { lockId, owner, signerAddress } = parsedLog.args;
 
                   console.log(`🎯 LockRegistered event found:`, {
                     lockId: lockId?.toString(),
                     owner,
-                    publicKey,
-                    pendingKey: pendingRegistration.publicKey,
+                    signerAddress,
+                    pendingKey: pendingRegistration.lockAddress,
                   });
 
-                  if (publicKey === pendingRegistration.publicKey) {
+                  if (signerAddress === pendingRegistration.lockAddress) {
                     console.log(
                       `🎉 Lock registered successfully! ID: ${lockId}`
                     );
                     eventFound = true;
 
                     // Update the lock with blockchain ID
-                    updateLockByPublicKey(publicKey, {
+                    updateLockByPublicKey(pendingRegistration.publicKey, {
                       id: Number(lockId),
                       status: "active",
                     })
@@ -171,7 +172,7 @@ export const useLock = (): UseLockReturn => {
                         pendingRegistration?.callback?.({
                           lockId: Number(lockId),
                           owner,
-                          publicKey,
+                          publicKey: pendingRegistration.publicKey,
                           transactionHash: transactionReceipt.transactionHash,
                         });
 
@@ -491,6 +492,7 @@ export const useLock = (): UseLockReturn => {
         const timeoutId = createRegistrationTimeout(newLock.publicKey);
         setPendingRegistration({
           publicKey: newLock.publicKey,
+          lockAddress: newLock.address,
           callback: onLockRegistered,
           timeoutId,
         });
@@ -498,7 +500,7 @@ export const useLock = (): UseLockReturn => {
         // Step 4: Execute the blockchain transaction
         console.log("⚡️ Registering lock on blockchain...");
         console.log(
-          `📤 Sending registerLock with publicKey: ${newLock.publicKey}`
+          `📤 Sending registerLock with lock address: ${newLock.address}`
         );
         console.log(`📤 Contract address: ${CONTRACT_ADDRESS}`);
         console.log(`📤 User address: ${address}`);
@@ -507,7 +509,7 @@ export const useLock = (): UseLockReturn => {
           address: CONTRACT_ADDRESS,
           abi: AccessControl__factory.abi,
           functionName: "registerLock",
-          args: [newLock.publicKey],
+          args: [newLock.address as `0x${string}`], // Send lock address instead of public key
         });
 
         console.log("🚀 Lock registration submitted to blockchain!");
@@ -564,6 +566,7 @@ export const useLock = (): UseLockReturn => {
         const timeoutId = createRegistrationTimeout(lock.publicKey);
         setPendingRegistration({
           publicKey: lock.publicKey,
+          lockAddress: lock.address,
           callback: onLockRegistered,
           timeoutId,
         });
@@ -571,13 +574,13 @@ export const useLock = (): UseLockReturn => {
         // Execute the blockchain transaction with existing public key
         console.log("⚡️ Retrying lock registration on blockchain...");
         console.log(
-          `📤 Sending registerLock with publicKey: ${lock.publicKey}`
+          `📤 Sending registerLock with lock address: ${lock.address}`
         );
         await writeContract({
           address: CONTRACT_ADDRESS,
           abi: AccessControl__factory.abi,
           functionName: "registerLock",
-          args: [lock.publicKey],
+          args: [lock.address as `0x${string}`], // Send lock address instead of public key
         });
 
         console.log("🚀 Lock retry registration submitted to blockchain!");

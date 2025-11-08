@@ -3,11 +3,16 @@ import { useWriteContract, useAccount } from "wagmi";
 import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { v4 as uuidv4 } from "uuid";
-import { CryptoUtils } from "@mrazakos/vc-ecdsa-crypto";
+import {
+  ECDSACryptoService,
+  VCIssuer,
+  AccessControlCredentialSubject,
+  VCRevoke,
+} from "@mrazakos/vc-ecdsa-crypto";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { VerifiableCredential, UserMetaData } from "../types/types";
-import { VCSigningInput } from "@mrazakos/vc-ecdsa-crypto";
 import { environment } from "../config/environment";
+import { LockService } from "../services/LockService";
 
 // Contract configuration - uses environment-based contract address
 const CONTRACT_ADDRESS = (environment.network.contractAddress ||
@@ -25,18 +30,18 @@ export enum CredentialType {
 
 // 🔐 Extended VerifiableCredential with type classification
 export interface TypedVerifiableCredential extends VerifiableCredential {
-  type: CredentialType;
+  credentialType: CredentialType; // Renamed from 'type' to avoid conflict with W3C type
 }
 
 // 🏭 ISSUED CREDENTIAL - Stores full user metadata
 export interface IssuedCredential extends TypedVerifiableCredential {
-  type: CredentialType.ISSUED;
+  credentialType: CredentialType.ISSUED;
   userMetaData: UserMetaData; // Store full user metadata for issued credentials
 }
 
 // 🚪 ACCESS CREDENTIAL - Stores only user metadata hash
 export interface AccessCredential extends TypedVerifiableCredential {
-  type: CredentialType.ACCESS;
+  credentialType: CredentialType.ACCESS;
   // userMetaDataHash is already in base VerifiableCredential
 }
 
@@ -53,8 +58,9 @@ export interface CredentialRequest {
   lockId: number;
   lockNickname: string;
   userMetaData: UserMetaData;
+  pubk: string;
   privK: string;
-  expirationDate?: string; // ISO string format
+  validUntil?: string; // ISO string format
 }
 
 export interface UseVerifiableCredentialsReturn {
@@ -90,12 +96,13 @@ export interface UseVerifiableCredentialsReturn {
   isCredentialExpired: (credential: VerifiableCredential) => boolean;
   clearAllCredentials: () => Promise<void>;
 
+  // 🧹 Utility: Get clean W3C credential (removes extra fields added after signing)
+  getCleanCredential: (
+    credential: IssuedCredential | AccessCredential
+  ) => VerifiableCredential;
+
   // 🔐 Signature revocation on blockchain (for issued credentials)
   revokeIssuedCredential: (credentialId: string) => Promise<void>;
-  batchRevokeSignatures: (
-    lockId: number,
-    signatures: string[]
-  ) => Promise<void>;
   isTransactionPending: boolean;
   transactionHash: string | null;
   transactionError: string | null;
@@ -154,12 +161,38 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
   // Check if a credential is expired
   const isCredentialExpired = useCallback(
     (credential: VerifiableCredential): boolean => {
-      if (!credential.expirationDate) {
+      if (!credential.validUntil) {
         return false; // No expiration date means it doesn't expire
       }
 
-      const expirationDate = new Date(credential.expirationDate);
+      const expirationDate = new Date(credential.validUntil);
       return expirationDate < new Date();
+    },
+    []
+  );
+
+  // 🧹 Get clean W3C credential (removes extra fields added after signing)
+  // This is critical for signature verification - extra fields break verification
+  const getCleanCredential = useCallback(
+    (credential: IssuedCredential | AccessCredential): VerifiableCredential => {
+      const cleanCredential: any = {
+        "@context": credential["@context"],
+        id: credential.id,
+        type: credential.type,
+        issuer: credential.issuer,
+        credentialSubject: credential.credentialSubject,
+        proof: credential.proof,
+      };
+
+      // Add optional W3C standard fields if they exist
+      if (credential.validFrom) {
+        cleanCredential.validFrom = credential.validFrom;
+      }
+      if (credential.validUntil) {
+        cleanCredential.validUntil = credential.validUntil;
+      }
+
+      return cleanCredential as VerifiableCredential;
     },
     []
   );
@@ -172,45 +205,66 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setError(null);
 
         const credentialId = generateCredentialId();
-        const issuanceDate = new Date().toISOString();
+
+        // Initialize services
+        const crypto = new ECDSACryptoService();
+        const issuer = new VCIssuer();
 
         // Hash the user data for privacy (user data won't be revealed)
-        const userMetaDataHash = CryptoUtils.hash(
+        const userMetaDataHash = crypto.hash(
           JSON.stringify(request.userMetaData)
         );
 
-        // Create VC signing input
-        const vcInput: VCSigningInput = {
+        // Create credential subject with lock info
+        const credentialSubject: AccessControlCredentialSubject = {
+          id: `did:user:${userMetaDataHash.slice(0, 16)}`,
           userMetaDataHash: userMetaDataHash,
-          issuanceDate: issuanceDate,
-          expirationDate: request.expirationDate,
+          lock: {
+            id: request.lockId.toString(),
+            name: request.lockNickname,
+          },
+          accessLevel: "standard",
+          permissions: ["unlock"],
         };
 
-        // Sign the VC input
-        const signingResult = await CryptoUtils.sign(vcInput, request.privK);
+        // Create issuer identity
+        const issuerInfo = {
+          id: `did:lock:${request.lockId}`,
+          name: request.lockNickname,
+        };
 
-        // Guard: Ensure both signature and signedMessageHash are present
-        if (
-          !signingResult ||
-          !signingResult.signature ||
-          !signingResult.signedMessageHash
-        ) {
-          throw new Error(
-            "Failed to sign verifiable credential: missing signature or signedMessageHash"
-          );
-        }
-        // Create the issued credential with full userMetaData
+        // Issue the credential using the new VCIssuer API
+        const credential = await issuer.issueOffChainCredential(
+          issuerInfo,
+          credentialSubject,
+          request.privK,
+          {
+            publicKey: request.pubk,
+            credentialTypes: ["LockAccessCredential"],
+            credentialId: credentialId,
+            validityDays: request.validUntil
+              ? Math.max(
+                  1,
+                  Math.ceil(
+                    (new Date(request.validUntil).getTime() - Date.now()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                )
+              : undefined,
+          }
+        );
+
+        // Create the issued credential with full userMetaData and backward compatibility fields
         const issuedCredential: IssuedCredential = {
+          ...credential,
+          credentialSubject:
+            credential.credentialSubject as AccessControlCredentialSubject,
           id: credentialId,
-          lockId: request.lockId,
-          signedMessageHash: signingResult.signedMessageHash,
-          lockNickname: request.lockNickname,
-          signature: signingResult.signature,
-          userDataHash: userMetaDataHash, // Include the hash for verification
-          issuanceDate: issuanceDate,
-          expirationDate: request.expirationDate,
-          type: CredentialType.ISSUED,
+          credentialType: CredentialType.ISSUED,
           userMetaData: request.userMetaData, // Store full metadata for issued credentials
+          // Backward compatibility fields
+          lockId: request.lockId,
+          lockNickname: request.lockNickname,
         };
 
         // Store in issued credentials
@@ -258,7 +312,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         const { qrExpiresAt, ...credentialWithoutQrData } = credential;
         const accessCredential: AccessCredential = {
           ...credentialWithoutQrData,
-          type: CredentialType.ACCESS,
+          credentialType: CredentialType.ACCESS,
         };
 
         // Check if credential already exists
@@ -369,7 +423,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(true);
         setError(null);
 
-        // Find the credential to get its signature and lockId
+        // Find the credential to revoke
         const credentialToRevoke = issuedCredentials.find(
           (c) => c.id === credentialId
         );
@@ -384,18 +438,62 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
         console.log("🚫 Revoking credential on blockchain:", credentialId);
 
-        // First, revoke the signature on the blockchain
+        // Get lock info from credential subject (handle both single and array cases)
+        const subject = Array.isArray(credentialToRevoke.credentialSubject)
+          ? credentialToRevoke.credentialSubject[0]
+          : credentialToRevoke.credentialSubject;
+
+        if (!subject.lock) {
+          throw new Error("Credential does not have lock information");
+        }
+
+        // Get the lock's private key and address to sign the revocation
+        const lock = await LockService.getInstance().getLockById(
+          parseInt(subject.lock.id)
+        );
+
+        if (!lock) {
+          throw new Error("Lock not found");
+        }
+
+        // Get clean credential (remove extra fields before converting to on-chain)
+        const cleanCredential = getCleanCredential(credentialToRevoke);
+
+        // Use VCRevoke to convert the off-chain VC to on-chain format
+        const vcRevoke = new VCRevoke();
+        const onChainVC = await vcRevoke.convertToOnChain(
+          cleanCredential,
+          lock.privateKey,
+          lock.address
+        );
+
+        // Get the credential hash (same for both off-chain and on-chain)
+        const vcHash = vcRevoke.getCredentialHash(onChainVC);
+
+        // Get the on-chain signature from the proof
+        const signature = Array.isArray(onChainVC.proof)
+          ? onChainVC.proof[0].proofValue
+          : onChainVC.proof.proofValue;
+
+        const lockId = BigInt(subject.lock.id);
+
+        console.log("🚫 Revoking with params:", {
+          lockId: lockId.toString(),
+          vcHash,
+          signature,
+          lockAddress: lock.address,
+        });
+
+        // Revoke the credential on the blockchain
+        // revokeCredential(uint256 lockId, bytes32 vcHash, bytes signature)
         await writeContract({
           address: CONTRACT_ADDRESS,
           abi: AccessControl__factory.abi,
-          functionName: "revokeSignature",
-          args: [
-            BigInt(credentialToRevoke.lockId),
-            credentialToRevoke.signature,
-          ],
+          functionName: "revokeCredential",
+          args: [lockId, vcHash as `0x${string}`, signature as `0x${string}`],
         });
 
-        console.log("🚫 Signature revocation submitted to blockchain");
+        console.log("🚫 Credential revocation submitted to blockchain");
 
         // Remove from local storage after blockchain transaction is submitted
         const updatedCredentials = issuedCredentials.filter(
@@ -418,7 +516,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(false);
       }
     },
-    [issuedCredentials, address, writeContract]
+    [issuedCredentials, address, writeContract, getCleanCredential]
   );
 
   // 🔍 Helper functions for access credentials
@@ -508,36 +606,6 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     }
   }, []);
 
-  // 🔐 Batch revoke signatures on blockchain
-  const batchRevokeSignatures = useCallback(
-    async (lockId: number, signatures: string[]): Promise<void> => {
-      try {
-        setError(null);
-
-        if (!address) {
-          throw new Error("Wallet not connected");
-        }
-
-        await writeContract({
-          address: CONTRACT_ADDRESS,
-          abi: AccessControl__factory.abi,
-          functionName: "batchRevokeSignatures",
-          args: [BigInt(lockId), signatures],
-        });
-
-        console.log("🚫 Batch signature revocation submitted to blockchain");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to batch revoke signatures on chain";
-        setError(errorMessage);
-        throw new Error(errorMessage);
-      }
-    },
-    [writeContract, address]
-  );
-
   return {
     // 📋 All credentials (both types)
     allCredentials,
@@ -567,10 +635,10 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     getCredentialById,
     isCredentialExpired,
     clearAllCredentials,
+    getCleanCredential,
 
     // 🔐 Signature revocation on blockchain (for issued credentials)
     revokeIssuedCredential,
-    batchRevokeSignatures,
     isTransactionPending,
     transactionHash: transactionHash || null,
     transactionError,

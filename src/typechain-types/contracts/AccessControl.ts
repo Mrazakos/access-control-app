@@ -29,42 +29,41 @@ import type {
 
 export interface AccessControlInterface extends utils.Interface {
   functions: {
-    "MAX_PUBLIC_KEY_LENGTH()": FunctionFragment;
-    "MAX_REVOKED_SIGNATURES()": FunctionFragment;
-    "batchRevokeSignatures(uint256,string[])": FunctionFragment;
+    "MAX_REVOKED_CREDENTIALS()": FunctionFragment;
     "emergencyTransferLockOwnership(uint256,address)": FunctionFragment;
     "getLockInfo(uint256)": FunctionFragment;
     "getLockOwner(uint256)": FunctionFragment;
-    "getPublicKey(uint256)": FunctionFragment;
     "getRevokedSignatureCount(uint256)": FunctionFragment;
+    "getRevokedSignatures(uint256,bytes32[])": FunctionFragment;
+    "getSignerAddress(uint256)": FunctionFragment;
     "getTotalLocks()": FunctionFragment;
-    "isSignatureRevoked(uint256,string)": FunctionFragment;
+    "isCredentialRevoked(uint256,bytes32)": FunctionFragment;
     "lockExistsView(uint256)": FunctionFragment;
     "locks(uint256)": FunctionFragment;
     "owner()": FunctionFragment;
     "pause()": FunctionFragment;
     "paused()": FunctionFragment;
-    "registerLock(string)": FunctionFragment;
+    "registerLock(address)": FunctionFragment;
     "renounceOwnership()": FunctionFragment;
-    "revokeSignature(uint256,string)": FunctionFragment;
-    "revokedSignatures(uint256,bytes32)": FunctionFragment;
-    "transferLockOwnership(uint256,address)": FunctionFragment;
+    "revokeCredential(uint256,bytes32,bytes)": FunctionFragment;
+    "revokedCredentials(uint256,bytes32)": FunctionFragment;
+    "transferLockOwnership(uint256,bytes32,bytes,address)": FunctionFragment;
     "transferOwnership(address)": FunctionFragment;
     "unpause()": FunctionFragment;
+    "verifySignerAddress(uint256,address)": FunctionFragment;
   };
 
   getFunction(
     nameOrSignatureOrTopic:
-      | "MAX_PUBLIC_KEY_LENGTH"
-      | "MAX_REVOKED_SIGNATURES"
-      | "batchRevokeSignatures"
+      | "MAX_REVOKED_CREDENTIALS"
       | "emergencyTransferLockOwnership"
       | "getLockInfo"
       | "getLockOwner"
-      | "getPublicKey"
       | "getRevokedSignatureCount"
+      | "getRevokedSignatures"
+      | "getSignerAddress"
       | "getTotalLocks"
-      | "isSignatureRevoked"
+      | "isCredentialRevoked"
       | "lockExistsView"
       | "locks"
       | "owner"
@@ -72,24 +71,17 @@ export interface AccessControlInterface extends utils.Interface {
       | "paused"
       | "registerLock"
       | "renounceOwnership"
-      | "revokeSignature"
-      | "revokedSignatures"
+      | "revokeCredential"
+      | "revokedCredentials"
       | "transferLockOwnership"
       | "transferOwnership"
       | "unpause"
+      | "verifySignerAddress"
   ): FunctionFragment;
 
   encodeFunctionData(
-    functionFragment: "MAX_PUBLIC_KEY_LENGTH",
+    functionFragment: "MAX_REVOKED_CREDENTIALS",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "MAX_REVOKED_SIGNATURES",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "batchRevokeSignatures",
-    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>[]]
   ): string;
   encodeFunctionData(
     functionFragment: "emergencyTransferLockOwnership",
@@ -104,11 +96,15 @@ export interface AccessControlInterface extends utils.Interface {
     values: [PromiseOrValue<BigNumberish>]
   ): string;
   encodeFunctionData(
-    functionFragment: "getPublicKey",
+    functionFragment: "getRevokedSignatureCount",
     values: [PromiseOrValue<BigNumberish>]
   ): string;
   encodeFunctionData(
-    functionFragment: "getRevokedSignatureCount",
+    functionFragment: "getRevokedSignatures",
+    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<BytesLike>[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getSignerAddress",
     values: [PromiseOrValue<BigNumberish>]
   ): string;
   encodeFunctionData(
@@ -116,8 +112,8 @@ export interface AccessControlInterface extends utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "isSignatureRevoked",
-    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>]
+    functionFragment: "isCredentialRevoked",
+    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<BytesLike>]
   ): string;
   encodeFunctionData(
     functionFragment: "lockExistsView",
@@ -139,33 +135,38 @@ export interface AccessControlInterface extends utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "revokeSignature",
-    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>]
+    functionFragment: "revokeCredential",
+    values: [
+      PromiseOrValue<BigNumberish>,
+      PromiseOrValue<BytesLike>,
+      PromiseOrValue<BytesLike>
+    ]
   ): string;
   encodeFunctionData(
-    functionFragment: "revokedSignatures",
+    functionFragment: "revokedCredentials",
     values: [PromiseOrValue<BigNumberish>, PromiseOrValue<BytesLike>]
   ): string;
   encodeFunctionData(
     functionFragment: "transferLockOwnership",
-    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>]
+    values: [
+      PromiseOrValue<BigNumberish>,
+      PromiseOrValue<BytesLike>,
+      PromiseOrValue<BytesLike>,
+      PromiseOrValue<string>
+    ]
   ): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
     values: [PromiseOrValue<string>]
   ): string;
   encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "verifySignerAddress",
+    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>]
+  ): string;
 
   decodeFunctionResult(
-    functionFragment: "MAX_PUBLIC_KEY_LENGTH",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "MAX_REVOKED_SIGNATURES",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "batchRevokeSignatures",
+    functionFragment: "MAX_REVOKED_CREDENTIALS",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -181,11 +182,15 @@ export interface AccessControlInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "getPublicKey",
+    functionFragment: "getRevokedSignatureCount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "getRevokedSignatureCount",
+    functionFragment: "getRevokedSignatures",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getSignerAddress",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -193,7 +198,7 @@ export interface AccessControlInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "isSignatureRevoked",
+    functionFragment: "isCredentialRevoked",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -213,11 +218,11 @@ export interface AccessControlInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "revokeSignature",
+    functionFragment: "revokeCredential",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "revokedSignatures",
+    functionFragment: "revokedCredentials",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -229,23 +234,40 @@ export interface AccessControlInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "unpause", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "verifySignerAddress",
+    data: BytesLike
+  ): Result;
 
   events: {
+    "CredentialRevoked(uint256,bytes32,address)": EventFragment;
     "LockOwnershipTransferred(uint256,address,address)": EventFragment;
-    "LockRegistered(uint256,address,string)": EventFragment;
+    "LockRegistered(uint256,address,address)": EventFragment;
     "OwnershipTransferred(address,address)": EventFragment;
     "Paused(address)": EventFragment;
-    "SignatureRevoked(uint256,bytes32,address)": EventFragment;
     "Unpaused(address)": EventFragment;
   };
 
+  getEvent(nameOrSignatureOrTopic: "CredentialRevoked"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "LockOwnershipTransferred"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "LockRegistered"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Paused"): EventFragment;
-  getEvent(nameOrSignatureOrTopic: "SignatureRevoked"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Unpaused"): EventFragment;
 }
+
+export interface CredentialRevokedEventObject {
+  lockId: BigNumber;
+  vcHash: string;
+  owner: string;
+}
+export type CredentialRevokedEvent = TypedEvent<
+  [BigNumber, string, string],
+  CredentialRevokedEventObject
+>;
+
+export type CredentialRevokedEventFilter =
+  TypedEventFilter<CredentialRevokedEvent>;
 
 export interface LockOwnershipTransferredEventObject {
   lockId: BigNumber;
@@ -263,7 +285,7 @@ export type LockOwnershipTransferredEventFilter =
 export interface LockRegisteredEventObject {
   lockId: BigNumber;
   owner: string;
-  publicKey: string;
+  signerAddress: string;
 }
 export type LockRegisteredEvent = TypedEvent<
   [BigNumber, string, string],
@@ -290,19 +312,6 @@ export interface PausedEventObject {
 export type PausedEvent = TypedEvent<[string], PausedEventObject>;
 
 export type PausedEventFilter = TypedEventFilter<PausedEvent>;
-
-export interface SignatureRevokedEventObject {
-  lockId: BigNumber;
-  signatureHash: string;
-  owner: string;
-}
-export type SignatureRevokedEvent = TypedEvent<
-  [BigNumber, string, string],
-  SignatureRevokedEventObject
->;
-
-export type SignatureRevokedEventFilter =
-  TypedEventFilter<SignatureRevokedEvent>;
 
 export interface UnpausedEventObject {
   account: string;
@@ -338,15 +347,7 @@ export interface AccessControl extends BaseContract {
   removeListener: OnEvent<this>;
 
   functions: {
-    MAX_PUBLIC_KEY_LENGTH(overrides?: CallOverrides): Promise<[BigNumber]>;
-
-    MAX_REVOKED_SIGNATURES(overrides?: CallOverrides): Promise<[BigNumber]>;
-
-    batchRevokeSignatures(
-      lockId: PromiseOrValue<BigNumberish>,
-      signatures: PromiseOrValue<string>[],
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
-    ): Promise<ContractTransaction>;
+    MAX_REVOKED_CREDENTIALS(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     emergencyTransferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
@@ -360,7 +361,7 @@ export interface AccessControl extends BaseContract {
     ): Promise<
       [string, string, BigNumber, boolean] & {
         owner: string;
-        publicKey: string;
+        signerAddress: string;
         revokedCount: BigNumber;
         exists: boolean;
       }
@@ -371,21 +372,27 @@ export interface AccessControl extends BaseContract {
       overrides?: CallOverrides
     ): Promise<[string]>;
 
-    getPublicKey(
-      lockId: PromiseOrValue<BigNumberish>,
-      overrides?: CallOverrides
-    ): Promise<[string]>;
-
     getRevokedSignatureCount(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<[BigNumber]>;
 
+    getRevokedSignatures(
+      lockId: PromiseOrValue<BigNumberish>,
+      vcHashes: PromiseOrValue<BytesLike>[],
+      overrides?: CallOverrides
+    ): Promise<[boolean[]]>;
+
+    getSignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      overrides?: CallOverrides
+    ): Promise<[string]>;
+
     getTotalLocks(overrides?: CallOverrides): Promise<[BigNumber]>;
 
-    isSignatureRevoked(
+    isCredentialRevoked(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<[boolean]>;
 
@@ -400,7 +407,7 @@ export interface AccessControl extends BaseContract {
     ): Promise<
       [string, string, BigNumber, boolean] & {
         owner: string;
-        publicKey: string;
+        signerAddress: string;
         revokedCount: BigNumber;
         exists: boolean;
       }
@@ -415,7 +422,7 @@ export interface AccessControl extends BaseContract {
     paused(overrides?: CallOverrides): Promise<[boolean]>;
 
     registerLock(
-      publicKey: PromiseOrValue<string>,
+      signerAddress: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
 
@@ -423,13 +430,14 @@ export interface AccessControl extends BaseContract {
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
 
-    revokeSignature(
+    revokeCredential(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
 
-    revokedSignatures(
+    revokedCredentials(
       arg0: PromiseOrValue<BigNumberish>,
       arg1: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -437,6 +445,8 @@ export interface AccessControl extends BaseContract {
 
     transferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
+      message: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       newOwner: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
@@ -449,17 +459,15 @@ export interface AccessControl extends BaseContract {
     unpause(
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
+
+    verifySignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      signerAddress: PromiseOrValue<string>,
+      overrides?: CallOverrides
+    ): Promise<[boolean]>;
   };
 
-  MAX_PUBLIC_KEY_LENGTH(overrides?: CallOverrides): Promise<BigNumber>;
-
-  MAX_REVOKED_SIGNATURES(overrides?: CallOverrides): Promise<BigNumber>;
-
-  batchRevokeSignatures(
-    lockId: PromiseOrValue<BigNumberish>,
-    signatures: PromiseOrValue<string>[],
-    overrides?: Overrides & { from?: PromiseOrValue<string> }
-  ): Promise<ContractTransaction>;
+  MAX_REVOKED_CREDENTIALS(overrides?: CallOverrides): Promise<BigNumber>;
 
   emergencyTransferLockOwnership(
     lockId: PromiseOrValue<BigNumberish>,
@@ -473,7 +481,7 @@ export interface AccessControl extends BaseContract {
   ): Promise<
     [string, string, BigNumber, boolean] & {
       owner: string;
-      publicKey: string;
+      signerAddress: string;
       revokedCount: BigNumber;
       exists: boolean;
     }
@@ -484,21 +492,27 @@ export interface AccessControl extends BaseContract {
     overrides?: CallOverrides
   ): Promise<string>;
 
-  getPublicKey(
-    lockId: PromiseOrValue<BigNumberish>,
-    overrides?: CallOverrides
-  ): Promise<string>;
-
   getRevokedSignatureCount(
     lockId: PromiseOrValue<BigNumberish>,
     overrides?: CallOverrides
   ): Promise<BigNumber>;
 
+  getRevokedSignatures(
+    lockId: PromiseOrValue<BigNumberish>,
+    vcHashes: PromiseOrValue<BytesLike>[],
+    overrides?: CallOverrides
+  ): Promise<boolean[]>;
+
+  getSignerAddress(
+    lockId: PromiseOrValue<BigNumberish>,
+    overrides?: CallOverrides
+  ): Promise<string>;
+
   getTotalLocks(overrides?: CallOverrides): Promise<BigNumber>;
 
-  isSignatureRevoked(
+  isCredentialRevoked(
     lockId: PromiseOrValue<BigNumberish>,
-    signature: PromiseOrValue<string>,
+    vcHash: PromiseOrValue<BytesLike>,
     overrides?: CallOverrides
   ): Promise<boolean>;
 
@@ -513,7 +527,7 @@ export interface AccessControl extends BaseContract {
   ): Promise<
     [string, string, BigNumber, boolean] & {
       owner: string;
-      publicKey: string;
+      signerAddress: string;
       revokedCount: BigNumber;
       exists: boolean;
     }
@@ -528,7 +542,7 @@ export interface AccessControl extends BaseContract {
   paused(overrides?: CallOverrides): Promise<boolean>;
 
   registerLock(
-    publicKey: PromiseOrValue<string>,
+    signerAddress: PromiseOrValue<string>,
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
 
@@ -536,13 +550,14 @@ export interface AccessControl extends BaseContract {
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
 
-  revokeSignature(
+  revokeCredential(
     lockId: PromiseOrValue<BigNumberish>,
-    signature: PromiseOrValue<string>,
+    vcHash: PromiseOrValue<BytesLike>,
+    authSignature: PromiseOrValue<BytesLike>,
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
 
-  revokedSignatures(
+  revokedCredentials(
     arg0: PromiseOrValue<BigNumberish>,
     arg1: PromiseOrValue<BytesLike>,
     overrides?: CallOverrides
@@ -550,6 +565,8 @@ export interface AccessControl extends BaseContract {
 
   transferLockOwnership(
     lockId: PromiseOrValue<BigNumberish>,
+    message: PromiseOrValue<BytesLike>,
+    authSignature: PromiseOrValue<BytesLike>,
     newOwner: PromiseOrValue<string>,
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
@@ -563,16 +580,14 @@ export interface AccessControl extends BaseContract {
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
 
+  verifySignerAddress(
+    lockId: PromiseOrValue<BigNumberish>,
+    signerAddress: PromiseOrValue<string>,
+    overrides?: CallOverrides
+  ): Promise<boolean>;
+
   callStatic: {
-    MAX_PUBLIC_KEY_LENGTH(overrides?: CallOverrides): Promise<BigNumber>;
-
-    MAX_REVOKED_SIGNATURES(overrides?: CallOverrides): Promise<BigNumber>;
-
-    batchRevokeSignatures(
-      lockId: PromiseOrValue<BigNumberish>,
-      signatures: PromiseOrValue<string>[],
-      overrides?: CallOverrides
-    ): Promise<void>;
+    MAX_REVOKED_CREDENTIALS(overrides?: CallOverrides): Promise<BigNumber>;
 
     emergencyTransferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
@@ -586,7 +601,7 @@ export interface AccessControl extends BaseContract {
     ): Promise<
       [string, string, BigNumber, boolean] & {
         owner: string;
-        publicKey: string;
+        signerAddress: string;
         revokedCount: BigNumber;
         exists: boolean;
       }
@@ -597,21 +612,27 @@ export interface AccessControl extends BaseContract {
       overrides?: CallOverrides
     ): Promise<string>;
 
-    getPublicKey(
-      lockId: PromiseOrValue<BigNumberish>,
-      overrides?: CallOverrides
-    ): Promise<string>;
-
     getRevokedSignatureCount(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getRevokedSignatures(
+      lockId: PromiseOrValue<BigNumberish>,
+      vcHashes: PromiseOrValue<BytesLike>[],
+      overrides?: CallOverrides
+    ): Promise<boolean[]>;
+
+    getSignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      overrides?: CallOverrides
+    ): Promise<string>;
+
     getTotalLocks(overrides?: CallOverrides): Promise<BigNumber>;
 
-    isSignatureRevoked(
+    isCredentialRevoked(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<boolean>;
 
@@ -626,7 +647,7 @@ export interface AccessControl extends BaseContract {
     ): Promise<
       [string, string, BigNumber, boolean] & {
         owner: string;
-        publicKey: string;
+        signerAddress: string;
         revokedCount: BigNumber;
         exists: boolean;
       }
@@ -639,19 +660,20 @@ export interface AccessControl extends BaseContract {
     paused(overrides?: CallOverrides): Promise<boolean>;
 
     registerLock(
-      publicKey: PromiseOrValue<string>,
+      signerAddress: PromiseOrValue<string>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
     renounceOwnership(overrides?: CallOverrides): Promise<void>;
 
-    revokeSignature(
+    revokeCredential(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<void>;
 
-    revokedSignatures(
+    revokedCredentials(
       arg0: PromiseOrValue<BigNumberish>,
       arg1: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -659,6 +681,8 @@ export interface AccessControl extends BaseContract {
 
     transferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
+      message: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       newOwner: PromiseOrValue<string>,
       overrides?: CallOverrides
     ): Promise<void>;
@@ -669,9 +693,26 @@ export interface AccessControl extends BaseContract {
     ): Promise<void>;
 
     unpause(overrides?: CallOverrides): Promise<void>;
+
+    verifySignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      signerAddress: PromiseOrValue<string>,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
   };
 
   filters: {
+    "CredentialRevoked(uint256,bytes32,address)"(
+      lockId?: PromiseOrValue<BigNumberish> | null,
+      vcHash?: PromiseOrValue<BytesLike> | null,
+      owner?: null
+    ): CredentialRevokedEventFilter;
+    CredentialRevoked(
+      lockId?: PromiseOrValue<BigNumberish> | null,
+      vcHash?: PromiseOrValue<BytesLike> | null,
+      owner?: null
+    ): CredentialRevokedEventFilter;
+
     "LockOwnershipTransferred(uint256,address,address)"(
       lockId?: PromiseOrValue<BigNumberish> | null,
       previousOwner?: PromiseOrValue<string> | null,
@@ -683,15 +724,15 @@ export interface AccessControl extends BaseContract {
       newOwner?: PromiseOrValue<string> | null
     ): LockOwnershipTransferredEventFilter;
 
-    "LockRegistered(uint256,address,string)"(
+    "LockRegistered(uint256,address,address)"(
       lockId?: PromiseOrValue<BigNumberish> | null,
       owner?: PromiseOrValue<string> | null,
-      publicKey?: null
+      signerAddress?: PromiseOrValue<string> | null
     ): LockRegisteredEventFilter;
     LockRegistered(
       lockId?: PromiseOrValue<BigNumberish> | null,
       owner?: PromiseOrValue<string> | null,
-      publicKey?: null
+      signerAddress?: PromiseOrValue<string> | null
     ): LockRegisteredEventFilter;
 
     "OwnershipTransferred(address,address)"(
@@ -706,31 +747,12 @@ export interface AccessControl extends BaseContract {
     "Paused(address)"(account?: null): PausedEventFilter;
     Paused(account?: null): PausedEventFilter;
 
-    "SignatureRevoked(uint256,bytes32,address)"(
-      lockId?: PromiseOrValue<BigNumberish> | null,
-      signatureHash?: PromiseOrValue<BytesLike> | null,
-      owner?: PromiseOrValue<string> | null
-    ): SignatureRevokedEventFilter;
-    SignatureRevoked(
-      lockId?: PromiseOrValue<BigNumberish> | null,
-      signatureHash?: PromiseOrValue<BytesLike> | null,
-      owner?: PromiseOrValue<string> | null
-    ): SignatureRevokedEventFilter;
-
     "Unpaused(address)"(account?: null): UnpausedEventFilter;
     Unpaused(account?: null): UnpausedEventFilter;
   };
 
   estimateGas: {
-    MAX_PUBLIC_KEY_LENGTH(overrides?: CallOverrides): Promise<BigNumber>;
-
-    MAX_REVOKED_SIGNATURES(overrides?: CallOverrides): Promise<BigNumber>;
-
-    batchRevokeSignatures(
-      lockId: PromiseOrValue<BigNumberish>,
-      signatures: PromiseOrValue<string>[],
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
-    ): Promise<BigNumber>;
+    MAX_REVOKED_CREDENTIALS(overrides?: CallOverrides): Promise<BigNumber>;
 
     emergencyTransferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
@@ -748,21 +770,27 @@ export interface AccessControl extends BaseContract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    getPublicKey(
+    getRevokedSignatureCount(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    getRevokedSignatureCount(
+    getRevokedSignatures(
+      lockId: PromiseOrValue<BigNumberish>,
+      vcHashes: PromiseOrValue<BytesLike>[],
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    getSignerAddress(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
     getTotalLocks(overrides?: CallOverrides): Promise<BigNumber>;
 
-    isSignatureRevoked(
+    isCredentialRevoked(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
@@ -785,7 +813,7 @@ export interface AccessControl extends BaseContract {
     paused(overrides?: CallOverrides): Promise<BigNumber>;
 
     registerLock(
-      publicKey: PromiseOrValue<string>,
+      signerAddress: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<BigNumber>;
 
@@ -793,13 +821,14 @@ export interface AccessControl extends BaseContract {
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<BigNumber>;
 
-    revokeSignature(
+    revokeCredential(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<BigNumber>;
 
-    revokedSignatures(
+    revokedCredentials(
       arg0: PromiseOrValue<BigNumberish>,
       arg1: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -807,6 +836,8 @@ export interface AccessControl extends BaseContract {
 
     transferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
+      message: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       newOwner: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<BigNumber>;
@@ -819,21 +850,17 @@ export interface AccessControl extends BaseContract {
     unpause(
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<BigNumber>;
+
+    verifySignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      signerAddress: PromiseOrValue<string>,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
   };
 
   populateTransaction: {
-    MAX_PUBLIC_KEY_LENGTH(
+    MAX_REVOKED_CREDENTIALS(
       overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
-
-    MAX_REVOKED_SIGNATURES(
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
-
-    batchRevokeSignatures(
-      lockId: PromiseOrValue<BigNumberish>,
-      signatures: PromiseOrValue<string>[],
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<PopulatedTransaction>;
 
     emergencyTransferLockOwnership(
@@ -852,21 +879,27 @@ export interface AccessControl extends BaseContract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    getPublicKey(
+    getRevokedSignatureCount(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    getRevokedSignatureCount(
+    getRevokedSignatures(
+      lockId: PromiseOrValue<BigNumberish>,
+      vcHashes: PromiseOrValue<BytesLike>[],
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    getSignerAddress(
       lockId: PromiseOrValue<BigNumberish>,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
     getTotalLocks(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
-    isSignatureRevoked(
+    isCredentialRevoked(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
@@ -889,7 +922,7 @@ export interface AccessControl extends BaseContract {
     paused(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     registerLock(
-      publicKey: PromiseOrValue<string>,
+      signerAddress: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<PopulatedTransaction>;
 
@@ -897,13 +930,14 @@ export interface AccessControl extends BaseContract {
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<PopulatedTransaction>;
 
-    revokeSignature(
+    revokeCredential(
       lockId: PromiseOrValue<BigNumberish>,
-      signature: PromiseOrValue<string>,
+      vcHash: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<PopulatedTransaction>;
 
-    revokedSignatures(
+    revokedCredentials(
       arg0: PromiseOrValue<BigNumberish>,
       arg1: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -911,6 +945,8 @@ export interface AccessControl extends BaseContract {
 
     transferLockOwnership(
       lockId: PromiseOrValue<BigNumberish>,
+      message: PromiseOrValue<BytesLike>,
+      authSignature: PromiseOrValue<BytesLike>,
       newOwner: PromiseOrValue<string>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<PopulatedTransaction>;
@@ -922,6 +958,12 @@ export interface AccessControl extends BaseContract {
 
     unpause(
       overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
+
+    verifySignerAddress(
+      lockId: PromiseOrValue<BigNumberish>,
+      signerAddress: PromiseOrValue<string>,
+      overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
   };
 }

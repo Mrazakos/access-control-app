@@ -2,18 +2,27 @@
 // APPLICATION-SPECIFIC TYPES
 // ============================================================================
 
+import {
+  VerifiableCredential as BaseVerifiableCredential,
+  AccessControlCredentialSubject,
+} from "@mrazakos/vc-ecdsa-crypto";
+
 /**
- * Represents a verifiable credential containing user metadata
+ * Extended Verifiable Credential for our access control application
+ * Adds application-specific fields for local storage and backward compatibility
  */
-export interface VerifiableCredential {
-  signedMessageHash: string; // hash of the message containing userDataHash + expiration date
-  lockId: number;
-  lockNickname: string;
-  signature: string;
-  userDataHash: string; // hash of the user metadata for privacy protection
-  expirationDate?: string; // ISO string format
-  issuanceDate?: string; // ISO string format
-  id?: string; // Unique identifier for the credential
+export interface VerifiableCredential extends BaseVerifiableCredential {
+  // Use AccessControlCredentialSubject from the library (can be single or array per W3C spec)
+  credentialSubject:
+    | AccessControlCredentialSubject
+    | AccessControlCredentialSubject[];
+
+  // Application-specific fields for local storage
+  id?: string; // Unique identifier for local storage (UUID)
+
+  // Backward compatibility fields (for migration)
+  lockId?: number; // Deprecated: use credentialSubject.lock.id (or credentialSubject[0].lock.id if array)
+  lockNickname?: string; // Deprecated: use credentialSubject.lock.name
 }
 
 /**

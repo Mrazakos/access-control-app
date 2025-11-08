@@ -19,8 +19,10 @@ import {
   QrCodeCredential,
   useVerifiableCredentials,
 } from "../hooks/useVerifiableCredentials";
+import { useLockApi } from "../hooks/useLockApi";
 import { useCall } from "wagmi";
 import { AccessControl } from "../typechain-types";
+import { VerifiableCredential } from "@mrazakos/vc-ecdsa-crypto";
 
 export default function UnlockScreen() {
   const {
@@ -32,8 +34,15 @@ export default function UnlockScreen() {
     deleteAccessCredential,
     refreshAccessCredentials,
     receiveAccessCredential,
+    getCleanCredential,
   } = useVerifiableCredentials();
   const { showAlert, AlertComponent } = useCustomAlert();
+
+  // Initialize Lock API hook
+  const lockApi = useLockApi({
+    baseUrl: "http://192.168.0.17:3000/api/v1",
+  });
+
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -102,9 +111,17 @@ export default function UnlockScreen() {
       // Parse the QR code data
       const credential = JSON.parse(data) as QrCodeCredential;
 
-      // Validate that it's a proper credential object
-      if (!credential.id || !credential.lockId || !credential.signature) {
-        throw new Error("Invalid QR code format");
+      // Validate that it's a proper credential object with W3C VC structure
+      if (
+        !credential.id ||
+        !credential["@context"] ||
+        !credential.type ||
+        !credential.credentialSubject ||
+        !credential.proof
+      ) {
+        throw new Error(
+          "Invalid QR code format - missing required W3C VC fields"
+        );
       }
 
       // Try to receive the credential
@@ -156,8 +173,83 @@ export default function UnlockScreen() {
 
   const handleUnlock = async (credentialId: string) => {
     setUnlockingId(credentialId);
-    // TODO: Implement actual unlock logic here
-    setTimeout(() => setUnlockingId(null), 1200); // Simulate unlock
+
+    try {
+      // Find the credential
+      const credential = accessCredentials.find((c) => c.id === credentialId);
+
+      if (!credential) {
+        throw new Error("Credential not found");
+      }
+
+      if (isCredentialExpired(credential)) {
+        throw new Error("This credential has expired");
+      }
+
+      console.log("🔐 Attempting to unlock with credential:", credential.id);
+      console.log("🏢 Lock ID:", credential.lockId);
+      console.log("🏷️  Lock Name:", credential.lockNickname);
+
+      // Debug: Log the full credential structure
+      console.log("📋 Full credential:", JSON.stringify(credential, null, 2));
+
+      // Debug: Log the proof structure
+      const proof = Array.isArray(credential.proof)
+        ? credential.proof[0]
+        : credential.proof;
+      console.log("🔏 Proof:", JSON.stringify(proof, null, 2));
+      console.log(
+        "✍️  Signature (proofValue):",
+        proof?.proofValue?.substring(0, 50) + "..."
+      );
+
+      // 🧹 Get clean W3C credential (removes extra fields that break verification)
+      const cleanCredential = getCleanCredential(credential);
+
+      console.log("🧹 Sending clean credential (W3C standard fields only)");
+      console.log(
+        "📤 Clean credential:",
+        JSON.stringify(cleanCredential, null, 2)
+      );
+
+      // Send credential to lock's verification endpoint
+      const response = await lockApi.verifyCredential(cleanCredential);
+
+      console.log("✅ Verification response:", response);
+
+      if (response.verified) {
+        // Success!
+        showAlert({
+          title: "Unlock Successful! 🎉",
+          message: `The lock "${credential.lockNickname}" has been unlocked successfully!`,
+          icon: "checkmark-circle",
+          iconColor: "#34a853",
+          buttons: [{ text: "OK", style: "default" }],
+        });
+      } else {
+        // Verification failed
+        throw new Error(
+          response.error || response.isRevoked
+            ? "This credential has been revoked"
+            : "Verification failed"
+        );
+      }
+    } catch (error) {
+      console.error("❌ Unlock failed:", error);
+
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to unlock";
+
+      showAlert({
+        title: "Unlock Failed",
+        message: errorMessage,
+        icon: "close-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK", style: "default" }],
+      });
+    } finally {
+      setUnlockingId(null);
+    }
   };
 
   const handleDelete = (credentialId: string) => {
@@ -275,9 +367,9 @@ export default function UnlockScreen() {
                   <View style={styles.expirationContainer}>
                     <Ionicons name="time-outline" size={14} color="#9aa0a6" />
                     <Text style={styles.expirationText}>
-                      {cred.expirationDate
+                      {cred.validUntil
                         ? `Expires ${new Date(
-                            cred.expirationDate
+                            cred.validUntil
                           ).toLocaleDateString("en-us", {
                             year: "numeric",
                             month: "short",
