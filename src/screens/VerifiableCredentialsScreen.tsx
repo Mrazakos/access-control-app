@@ -171,8 +171,26 @@ export default function VerifiableCredentialsScreen({
       };
 
       console.log("🚀 Issuing credential for lock:", lock.id);
+      console.log(
+        "🔑 Using public key:",
+        lock.publicKey.substring(0, 50) + "..."
+      );
+      console.log(
+        "🔏 Using private key:",
+        lock.privateKey.substring(0, 20) + "..."
+      );
+
       const newCredential = await issueCredential(request);
-      console.log("✅ Credential issued successfully:", newCredential);
+      console.log("✅ Credential issued successfully:", newCredential.id);
+
+      // Log proof for debugging
+      const proof = Array.isArray(newCredential.proof)
+        ? newCredential.proof[0]
+        : newCredential.proof;
+      console.log(
+        "✍️  Signature created:",
+        proof?.proofValue?.substring(0, 50) + "..."
+      );
 
       showAlert({
         title: "Success",

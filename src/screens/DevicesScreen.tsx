@@ -18,7 +18,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCustomAlert } from "../components/CustomAlert";
 import { useLock } from "../hooks/useLock";
 import { Lock, LockStatus, CreateLockRequest } from "../services/LockService";
+import { useLockApi } from "../hooks/useLockApi";
 import VerifiableCredentialsScreen from "./VerifiableCredentialsScreen";
+import { VerifiableCredential } from "../types/types";
 
 export default function DeviceScreen() {
   const {
@@ -34,6 +36,11 @@ export default function DeviceScreen() {
 
   const { showAlert, AlertComponent } = useCustomAlert();
 
+  // Initialize Lock API hook with default base URL
+  const lockApi = useLockApi({
+    baseUrl: "http://192.168.0.17:3000/api/v1",
+  });
+
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -41,6 +48,9 @@ export default function DeviceScreen() {
   const [showVCsScreen, setShowVCsScreen] = useState(false);
   const [selectedLock, setSelectedLock] = useState<Lock | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [lockSetupStates, setLockSetupStates] = useState<{
+    [lockId: number]: "idle" | "setup" | "reset";
+  }>({});
   const [formData, setFormData] = useState<CreateLockRequest>({
     name: "",
     description: "",
@@ -190,6 +200,132 @@ export default function DeviceScreen() {
     setShowVCsScreen(true);
   };
 
+  // Handle lock setup
+  const handleSetupLock = async (lock: Lock) => {
+    try {
+      console.log("🔧 Setting up lock:", lock.id);
+      console.log(
+        "📤 Sending public key:",
+        lock.publicKey.substring(0, 50) + "..."
+      );
+      console.log("🔑 Full public key length:", lock.publicKey.length);
+
+      showAlert({
+        title: "Setting Up Lock",
+        message: `Initializing "${lock.name}" on the lock device...`,
+        icon: "construct",
+        iconColor: "#fbbc04",
+        buttons: [{ text: "OK" }],
+      });
+
+      const response = await lockApi.initializeLock(lock.id, lock.publicKey);
+
+      if (response.success) {
+        // Update the lock setup state to show "Reset" button
+        setLockSetupStates((prev) => ({
+          ...prev,
+          [lock.id]: "reset",
+        }));
+
+        showAlert({
+          title: "Success",
+          message: `Lock "${lock.name}" has been successfully configured on the device!`,
+          icon: "checkmark-circle",
+          iconColor: "#34a853",
+          buttons: [{ text: "OK" }],
+        });
+      } else {
+        throw new Error(response.error || "Setup failed");
+      }
+    } catch (err) {
+      showAlert({
+        title: "Setup Failed",
+        message:
+          err instanceof Error ? err.message : "Failed to setup lock device",
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+    }
+  };
+
+  // Handle lock reset
+  const handleResetLock = async (lock: Lock) => {
+    showAlert({
+      title: "Reset Lock Configuration",
+      message: `Are you sure you want to reset "${lock.name}"? You will need to set it up again.`,
+      icon: "refresh",
+      iconColor: "#fbbc04",
+      buttons: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Create a proper admin credential signed by the lock's private key
+              const { VCIssuer } = await import("@mrazakos/vc-ecdsa-crypto");
+              const issuer = new VCIssuer();
+
+              // Create admin credential subject
+              const credentialSubject = {
+                id: `did:admin:${lock.id}`,
+                accessLevel: "admin",
+                permissions: ["reset"],
+              };
+
+              // Issue the admin credential
+              const adminCredential = await issuer.issueOffChainCredential(
+                { id: `did:lock:${lock.id}`, name: lock.name },
+                credentialSubject,
+                lock.privateKey,
+                {
+                  publicKey: lock.publicKey,
+                  credentialTypes: ["AdminCredential"],
+                  credentialId: `admin-reset-${Date.now()}`,
+                  validityDays: 1, // Valid for 1 day
+                }
+              );
+
+              const response = await lockApi.resetLockConfig(
+                adminCredential as VerifiableCredential
+              );
+
+              if (response.success) {
+                // Update the lock setup state back to "setup"
+                setLockSetupStates((prev) => ({
+                  ...prev,
+                  [lock.id]: "setup",
+                }));
+
+                showAlert({
+                  title: "Success",
+                  message: `Lock "${lock.name}" has been reset. You can now set it up again.`,
+                  icon: "checkmark-circle",
+                  iconColor: "#34a853",
+                  buttons: [{ text: "OK" }],
+                });
+              } else {
+                throw new Error(response.error || "Reset failed");
+              }
+            } catch (err) {
+              showAlert({
+                title: "Reset Failed",
+                message:
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to reset lock device",
+                icon: "alert-circle",
+                iconColor: "#ea4335",
+                buttons: [{ text: "OK" }],
+              });
+            }
+          },
+        },
+      ],
+    });
+  };
+
   const handleRetryRegistration = async (lock: Lock) => {
     try {
       // Show immediate feedback that retry is starting
@@ -231,6 +367,7 @@ export default function DeviceScreen() {
 
   const renderLockCard = ({ item: lock }: { item: Lock }) => {
     const status = getLockStatus(lock);
+    const setupState = lockSetupStates[lock.id] || "setup";
 
     return (
       <View style={styles.lockCard}>
@@ -283,6 +420,38 @@ export default function DeviceScreen() {
                 : "Failed (tap to retry)"}
             </Text>
           </TouchableOpacity>
+
+          {/* Setup/Reset Button */}
+          {status === "active" && (
+            <TouchableOpacity
+              style={[
+                styles.setupButton,
+                setupState === "reset" && styles.resetButton,
+              ]}
+              onPress={() => {
+                if (setupState === "setup") {
+                  handleSetupLock(lock);
+                } else {
+                  handleResetLock(lock);
+                }
+              }}
+              disabled={lockApi.isLoading}
+            >
+              <Ionicons
+                name={setupState === "setup" ? "construct" : "refresh"}
+                size={16}
+                color={setupState === "setup" ? "#4285f4" : "#fbbc04"}
+              />
+              <Text
+                style={[
+                  styles.setupButtonText,
+                  setupState === "reset" && styles.resetButtonText,
+                ]}
+              >
+                {setupState === "setup" ? "Setup Lock" : "Reset Lock"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.actionButtons}>
@@ -866,5 +1035,31 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "400",
+  },
+  // Setup/Reset button styles
+  setupButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(66, 133, 244, 0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "rgba(66, 133, 244, 0.3)",
+  },
+  resetButton: {
+    backgroundColor: "rgba(251, 188, 4, 0.1)",
+    borderColor: "rgba(251, 188, 4, 0.3)",
+  },
+  setupButtonText: {
+    fontSize: 13,
+    color: "#4285f4",
+    fontWeight: "500",
+    marginLeft: 6,
+  },
+  resetButtonText: {
+    color: "#fbbc04",
   },
 });

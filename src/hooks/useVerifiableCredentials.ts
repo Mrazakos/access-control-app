@@ -97,6 +97,11 @@ export interface UseVerifiableCredentialsReturn {
   isCredentialExpired: (credential: VerifiableCredential) => boolean;
   clearAllCredentials: () => Promise<void>;
 
+  // 🧹 Utility: Get clean W3C credential (removes extra fields added after signing)
+  getCleanCredential: (
+    credential: IssuedCredential | AccessCredential
+  ) => VerifiableCredential;
+
   // 🔐 Signature revocation on blockchain (for issued credentials)
   revokeIssuedCredential: (credentialId: string) => Promise<void>;
   isTransactionPending: boolean;
@@ -167,6 +172,32 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     []
   );
 
+  // 🧹 Get clean W3C credential (removes extra fields added after signing)
+  // This is critical for signature verification - extra fields break verification
+  const getCleanCredential = useCallback(
+    (credential: IssuedCredential | AccessCredential): VerifiableCredential => {
+      const cleanCredential: any = {
+        "@context": credential["@context"],
+        id: credential.id,
+        type: credential.type,
+        issuer: credential.issuer,
+        credentialSubject: credential.credentialSubject,
+        proof: credential.proof,
+      };
+
+      // Add optional W3C standard fields if they exist
+      if (credential.validFrom) {
+        cleanCredential.validFrom = credential.validFrom;
+      }
+      if (credential.validUntil) {
+        cleanCredential.validUntil = credential.validUntil;
+      }
+
+      return cleanCredential as VerifiableCredential;
+    },
+    []
+  );
+
   // 🏭 Issue a new credential (stores full userMetaData)
   const issueCredential = useCallback(
     async (request: CredentialRequest): Promise<IssuedCredential> => {
@@ -175,7 +206,6 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setError(null);
 
         const credentialId = generateCredentialId();
-        const issuanceDate = new Date().toISOString();
 
         // Initialize services
         const crypto = new ECDSACryptoService();
@@ -427,10 +457,13 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           throw new Error("Lock not found");
         }
 
+        // Get clean credential (remove extra fields before converting to on-chain)
+        const cleanCredential = getCleanCredential(credentialToRevoke);
+
         // Use VCRevoke to convert the off-chain VC to on-chain format
         const vcRevoke = new VCRevoke();
         const onChainVC = await vcRevoke.convertToOnChain(
-          credentialToRevoke,
+          cleanCredential,
           lock.privateKey,
           lock.address
         );
@@ -484,7 +517,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(false);
       }
     },
-    [issuedCredentials, address, writeContract]
+    [issuedCredentials, address, writeContract, getCleanCredential]
   );
 
   // 🔍 Helper functions for access credentials
@@ -603,6 +636,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     getCredentialById,
     isCredentialExpired,
     clearAllCredentials,
+    getCleanCredential,
 
     // 🔐 Signature revocation on blockchain (for issued credentials)
     revokeIssuedCredential,
