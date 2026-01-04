@@ -3,16 +3,12 @@ import { useWriteContract, useAccount } from "wagmi";
 import { Address as ViemAddress } from "viem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { v4 as uuidv4 } from "uuid";
-import {
-  ECDSACryptoService,
-  VCIssuer,
-  AccessControlCredentialSubject,
-  VCRevoke,
-} from "@mrazakos/vc-ecdsa-crypto";
+import { VCRevoke } from "@mrazakos/vc-ecdsa-crypto";
 import { AccessControl__factory } from "../typechain-types/factories/contracts/AccessControl__factory";
 import { VerifiableCredential, UserMetaData } from "../types/types";
 import { environment } from "../config/environment";
 import { LockService } from "../services/LockService";
+import { CredentialService } from "../services/CredentialService";
 
 // Contract configuration - uses environment-based contract address
 const CONTRACT_ADDRESS = (environment.network.contractAddress ||
@@ -37,6 +33,7 @@ export interface TypedVerifiableCredential extends VerifiableCredential {
 export interface IssuedCredential extends TypedVerifiableCredential {
   credentialType: CredentialType.ISSUED;
   userMetaData: UserMetaData; // Store full user metadata for issued credentials
+  isOwner?: boolean; // Flag to identify owner credentials
 }
 
 // 🚪 ACCESS CREDENTIAL - Stores only user metadata hash
@@ -204,78 +201,25 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(true);
         setError(null);
 
-        const credentialId = generateCredentialId();
-
-        // Initialize services
-        const crypto = new ECDSACryptoService();
-        const issuer = new VCIssuer();
-
-        // Hash the user data for privacy (user data won't be revealed)
-        const userMetaDataHash = crypto.hash(
-          JSON.stringify(request.userMetaData)
-        );
-
-        // Create credential subject with lock info
-        const credentialSubject: AccessControlCredentialSubject = {
-          id: `did:user:${userMetaDataHash.slice(0, 16)}`,
-          userMetaDataHash: userMetaDataHash,
-          lock: {
-            id: request.lockId.toString(),
-            name: request.lockNickname,
-          },
-          accessLevel: "standard",
-          permissions: ["unlock"],
-        };
-
-        // Create issuer identity
-        const issuerInfo = {
-          id: `did:lock:${request.lockId}`,
-          name: request.lockNickname,
-        };
-
-        // Issue the credential using the new VCIssuer API
-        const credential = await issuer.issueOffChainCredential(
-          issuerInfo,
-          credentialSubject,
-          request.privK,
-          {
-            publicKey: request.pubk,
-            credentialTypes: ["LockAccessCredential"],
-            credentialId: credentialId,
-            validityDays: request.validUntil
-              ? Math.max(
-                  1,
-                  Math.ceil(
-                    (new Date(request.validUntil).getTime() - Date.now()) /
-                      (1000 * 60 * 60 * 24)
-                  )
-                )
-              : undefined,
-          }
-        );
-
-        // Create the issued credential with full userMetaData and backward compatibility fields
-        const issuedCredential: IssuedCredential = {
-          ...credential,
-          credentialSubject:
-            credential.credentialSubject as AccessControlCredentialSubject,
-          id: credentialId,
-          credentialType: CredentialType.ISSUED,
-          userMetaData: request.userMetaData, // Store full metadata for issued credentials
-          // Backward compatibility fields
+        // Use CredentialService to issue and store credential
+        const credentialService = CredentialService.getInstance();
+        const credential = await credentialService.issueAndStoreCredential({
           lockId: request.lockId,
           lockNickname: request.lockNickname,
-        };
+          lockPublicKey: request.pubk,
+          lockPrivateKey: request.privK,
+          userMetaData: request.userMetaData,
+          accessLevel: "standard", // Default for regular issued credentials
+          permissions: ["unlock"],
+          validUntil: request.validUntil,
+        });
 
-        // Store in issued credentials
-        const updatedCredentials = [...issuedCredentials, issuedCredential];
-        await AsyncStorage.setItem(
-          ISSUED_CREDENTIALS_KEY,
-          JSON.stringify(updatedCredentials)
-        );
+        // Update state
+        const updatedCredentials =
+          await credentialService.getStoredIssuedCredentials();
         setIssuedCredentials(updatedCredentials);
 
-        return issuedCredential;
+        return credential;
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to issue credential";
@@ -285,7 +229,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
         setIsLoading(false);
       }
     },
-    [generateCredentialId, issuedCredentials]
+    []
   );
 
   // 🚪 Receive an access credential (stores only userMetaDataHash)

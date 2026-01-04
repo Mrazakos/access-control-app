@@ -15,12 +15,18 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAccount } from "wagmi";
 import { useCustomAlert } from "../components/CustomAlert";
 import { useLock } from "../hooks/useLock";
 import { Lock, LockStatus, CreateLockRequest } from "../services/LockService";
 import { useLockApi } from "../hooks/useLockApi";
+import {
+  CredentialService,
+  IssueCredentialRequest,
+} from "../services/CredentialService";
 import VerifiableCredentialsScreen from "./VerifiableCredentialsScreen";
 import { VerifiableCredential } from "../types/types";
+import { IssuedCredential } from "../hooks/useVerifiableCredentials";
 
 export default function DeviceScreen() {
   const {
@@ -29,16 +35,17 @@ export default function DeviceScreen() {
     error,
     createAndRegisterLock,
     updateLock,
-    updateLockByPublicKey,
     deleteLock,
     retryLockRegistration,
   } = useLock();
 
+  const { address } = useAccount();
   const { showAlert, AlertComponent } = useCustomAlert();
+  const credentialService = CredentialService.getInstance();
 
   // Initialize Lock API hook with default base URL
   const lockApi = useLockApi({
-    baseUrl: "http://192.168.0.17:3000/api/v1",
+    baseUrl: "http://192.168.1.192:3000/api/v1",
   });
 
   // Form states
@@ -92,8 +99,23 @@ export default function DeviceScreen() {
       return;
     }
 
+    if (!address) {
+      showAlert({
+        title: "Error",
+        message: "Wallet not connected",
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+      return;
+    }
+
+    let createdLock: Lock | null = null;
+    let ownerVcCreated = false;
+
     try {
-      await createAndRegisterLock(formData, (result) => {
+      // Step 1: Create and register lock on blockchain
+      createdLock = await createAndRegisterLock(formData, (result) => {
         showAlert({
           title: "Success",
           message: `Lock "${formData.name}" created and registered on blockchain with ID: ${result.lockId}`,
@@ -102,8 +124,51 @@ export default function DeviceScreen() {
           buttons: [{ text: "OK" }],
         });
       });
+
+      console.log("Creating owner admin VC...");
+      try {
+        await credentialService.issueOwnerCredential(
+          createdLock.id,
+          createdLock.name,
+          createdLock.publicKey,
+          createdLock.privateKey,
+          address
+        );
+        ownerVcCreated = true;
+        console.log(`✅ Owner admin VC created for lock ${createdLock.id}`);
+      } catch (vcError) {
+        console.error("❌ Failed to create owner admin VC:", vcError);
+        throw new Error(
+          `Failed to create owner admin VC: ${
+            vcError instanceof Error ? vcError.message : "Unknown error"
+          }`
+        );
+      }
+
       setShowAddForm(false);
     } catch (err) {
+      // ROLLBACK: Remove owner VC if it was created
+      if (ownerVcCreated && createdLock) {
+        try {
+          console.log("🔄 Rolling back owner admin VC...");
+          await credentialService.removeCredentialsByLockId(createdLock.id);
+          console.log("✅ Owner admin VC rolled back");
+        } catch (rollbackError) {
+          console.error("❌ Failed to rollback owner VC:", rollbackError);
+        }
+      }
+
+      // ROLLBACK: Delete lock if it was created (and not yet on blockchain)
+      if (createdLock && createdLock.status !== "active") {
+        try {
+          console.log("🔄 Rolling back lock creation...");
+          await deleteLock(createdLock.id);
+          console.log("✅ Lock rolled back");
+        } catch (rollbackError) {
+          console.error("❌ Failed to rollback lock:", rollbackError);
+        }
+      }
+
       showAlert({
         title: "Error",
         message: err instanceof Error ? err.message : "Failed to create lock",
@@ -263,32 +328,27 @@ export default function DeviceScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Create a proper admin credential signed by the lock's private key
-              const { VCIssuer } = await import("@mrazakos/vc-ecdsa-crypto");
-              const issuer = new VCIssuer();
+              // Retrieve the owner admin credential for this lock
+              const ownerCredential =
+                await credentialService.getOwnerCredentialForLock(lock.id);
 
-              // Create admin credential subject
-              const credentialSubject = {
-                id: `did:admin:${lock.id}`,
-                accessLevel: "admin",
-                permissions: ["reset"],
-              };
+              if (!ownerCredential) {
+                throw new Error(
+                  "No owner credential found for this lock. Please generate an owner credential first."
+                );
+              }
 
-              // Issue the admin credential
-              const adminCredential = await issuer.issueOffChainCredential(
-                { id: `did:lock:${lock.id}`, name: lock.name },
-                credentialSubject,
-                lock.privateKey,
-                {
-                  publicKey: lock.publicKey,
-                  credentialTypes: ["AdminCredential"],
-                  credentialId: `admin-reset-${Date.now()}`,
-                  validityDays: 1, // Valid for 1 day
-                }
+              const cleanCredential =
+                credentialService.getCleanCredential(ownerCredential);
+
+              console.log(
+                "\ud83d\udc51 Using owner credential for reset:",
+                cleanCredential.id
               );
 
+              // Send the owner credential to reset the lock
               const response = await lockApi.resetLockConfig(
-                adminCredential as VerifiableCredential
+                cleanCredential as VerifiableCredential
               );
 
               if (response.success) {

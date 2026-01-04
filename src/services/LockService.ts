@@ -63,7 +63,7 @@ export class LockService {
         location: request.location,
         publicKey: identity.publicKey,
         privateKey: identity.privateKey,
-        address: identity.address, // NEW: Store Ethereum address
+        address: identity.address,
         createdAt: new Date().toISOString(),
         status: "syncing", // Initial status is syncing until blockchain confirmation
       };
