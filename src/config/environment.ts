@@ -70,7 +70,13 @@ export const environment = {
 
   // Blockchain Configuration (active network)
   network: activeNetwork,
-  
+
+  // Lock API Configuration
+  lockApiBaseUrl: getOptionalEnvVar(
+    "EXPO_PUBLIC_LOCK_API_BASE_URL",
+    "http://192.168.1.192:3000/api/v1"
+  ),
+
   // Backward compatibility (deprecated - use environment.network instead)
   contractAddress: activeNetwork.contractAddress,
   infuraApiKey: getRequiredEnvVar("EXPO_PUBLIC_INFURA_API_KEY"),

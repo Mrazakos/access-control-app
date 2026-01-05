@@ -26,6 +26,7 @@ import {
 } from "../services/CredentialService";
 import VerifiableCredentialsScreen from "./VerifiableCredentialsScreen";
 import { VerifiableCredential } from "../types/types";
+import { environment } from "../config/environment";
 
 export default function DeviceScreen() {
   const {
@@ -42,9 +43,9 @@ export default function DeviceScreen() {
   const { showAlert, AlertComponent } = useCustomAlert();
   const credentialService = CredentialService.getInstance();
 
-  // Initialize Lock API hook with default base URL
+  // Initialize Lock API hook with environment-based URL
   const lockApi = useLockApi({
-    baseUrl: "http://192.168.1.192:3000/api/v1",
+    baseUrl: environment.lockApiBaseUrl,
   });
 
   // Form states

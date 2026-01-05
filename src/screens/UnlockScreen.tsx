@@ -24,6 +24,7 @@ import { useCall } from "wagmi";
 import { AccessControl } from "../typechain-types";
 import { VerifiableCredential } from "@mrazakos/vc-ecdsa-crypto";
 import { CredentialService } from "../services/CredentialService";
+import environment from "../config/environment";
 
 export default function UnlockScreen() {
   const {
@@ -41,7 +42,7 @@ export default function UnlockScreen() {
   const credentialService = CredentialService.getInstance();
   // Initialize Lock API hook
   const lockApi = useLockApi({
-    baseUrl: "http://192.168.0.17:3000/api/v1",
+    baseUrl: environment.lockApiBaseUrl,
   });
 
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
