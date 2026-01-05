@@ -8,9 +8,11 @@ import {
 import { UserMetaData, VerifiableCredential } from "../types/types";
 import {
   AccessCredential,
-  CredentialType,
   IssuedCredential,
 } from "../hooks/useVerifiableCredentials";
+import { AccessLevel } from "../enums/accessLevels";
+import { Permissions } from "../enums/permissions";
+import { CredentialType } from "../enums/credentialType";
 
 // Storage key for issued credentials (must match useVerifiableCredentials)
 const ISSUED_CREDENTIALS_KEY = "@issued_credentials";
@@ -21,7 +23,7 @@ export interface IssueCredentialRequest {
   lockPublicKey: string;
   lockPrivateKey: string;
   userMetaData: UserMetaData;
-  accessLevel?: "standard" | "admin";
+  accessLevel?: AccessLevel;
   permissions?: string[];
   validUntil?: string; // ISO string format
   isOwner?: boolean; // Flag to identify owner credentials
@@ -65,10 +67,12 @@ export class CredentialService {
       );
 
       // Set default access level and permissions
-      const accessLevel = request.accessLevel || "standard";
+      const accessLevel = request.accessLevel || AccessLevel.STANDARD;
       const permissions =
         request.permissions ||
-        (accessLevel === "admin" ? ["unlock", "reset"] : ["unlock"]);
+        (accessLevel === AccessLevel.ADMIN
+          ? [Permissions.UNLOCK, Permissions.RESET]
+          : [Permissions.UNLOCK]);
 
       // Create credential subject with lock info
       const credentialSubject: AccessControlCredentialSubject = {
@@ -90,7 +94,7 @@ export class CredentialService {
 
       // Determine credential types
       const credentialTypes = ["LockAccessCredential"];
-      if (request.isOwner || accessLevel === "admin") {
+      if (request.isOwner || accessLevel === AccessLevel.ADMIN) {
         credentialTypes.push("OwnerCredential");
       }
 
@@ -236,8 +240,8 @@ export class CredentialService {
       lockPublicKey,
       lockPrivateKey,
       userMetaData: ownerMetaData,
-      accessLevel: "admin",
-      permissions: ["unlock", "reset"],
+      accessLevel: AccessLevel.ADMIN,
+      permissions: [Permissions.UNLOCK, Permissions.RESET],
       isOwner: true,
     });
   }
@@ -274,7 +278,7 @@ export class CredentialService {
 
     return (
       credential.isOwner === true ||
-      (subject.accessLevel === "admin" &&
+      (subject.accessLevel === AccessLevel.ADMIN &&
         (credential.type?.includes("OwnerCredential") || false))
     );
   }

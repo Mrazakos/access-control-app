@@ -26,7 +26,6 @@ import {
 } from "../services/CredentialService";
 import VerifiableCredentialsScreen from "./VerifiableCredentialsScreen";
 import { VerifiableCredential } from "../types/types";
-import { IssuedCredential } from "../hooks/useVerifiableCredentials";
 
 export default function DeviceScreen() {
   const {
@@ -111,10 +110,9 @@ export default function DeviceScreen() {
     }
 
     let createdLock: Lock | null = null;
-    let ownerVcCreated = false;
 
     try {
-      // Step 1: Create and register lock on blockchain
+      // Create and register lock on blockchain
       createdLock = await createAndRegisterLock(formData, (result) => {
         showAlert({
           title: "Success",
@@ -125,39 +123,8 @@ export default function DeviceScreen() {
         });
       });
 
-      console.log("Creating owner admin VC...");
-      try {
-        await credentialService.issueOwnerCredential(
-          createdLock.id,
-          createdLock.name,
-          createdLock.publicKey,
-          createdLock.privateKey,
-          address
-        );
-        ownerVcCreated = true;
-        console.log(`✅ Owner admin VC created for lock ${createdLock.id}`);
-      } catch (vcError) {
-        console.error("❌ Failed to create owner admin VC:", vcError);
-        throw new Error(
-          `Failed to create owner admin VC: ${
-            vcError instanceof Error ? vcError.message : "Unknown error"
-          }`
-        );
-      }
-
       setShowAddForm(false);
     } catch (err) {
-      // ROLLBACK: Remove owner VC if it was created
-      if (ownerVcCreated && createdLock) {
-        try {
-          console.log("🔄 Rolling back owner admin VC...");
-          await credentialService.removeCredentialsByLockId(createdLock.id);
-          console.log("✅ Owner admin VC rolled back");
-        } catch (rollbackError) {
-          console.error("❌ Failed to rollback owner VC:", rollbackError);
-        }
-      }
-
       // ROLLBACK: Delete lock if it was created (and not yet on blockchain)
       if (createdLock && createdLock.status !== "active") {
         try {

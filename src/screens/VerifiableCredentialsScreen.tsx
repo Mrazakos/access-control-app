@@ -23,12 +23,12 @@ import {
   useVerifiableCredentials,
   CredentialRequest,
   IssuedCredential,
-  CredentialType,
   QrCodeCredential,
 } from "../hooks/useVerifiableCredentials";
 import { Lock } from "../services/LockService";
 import { UserMetaData } from "../types/types";
 import { CredentialService } from "../services/CredentialService";
+import { CredentialType } from "../enums/credentialType";
 
 interface VerifiableCredentialsScreenProps {
   lock: Lock;
@@ -42,6 +42,7 @@ export default function VerifiableCredentialsScreen({
   const {
     issuedCredentials,
     issueCredential,
+    issueOwnerCredential,
     getIssuedCredentialsByLockId,
     isLoading,
     error,
@@ -249,6 +250,18 @@ export default function VerifiableCredentialsScreen({
     return `${minutes}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const formatUserIdentifier = (email: string | undefined): string => {
+    if (!email) return "No identifier";
+
+    const isWalletAddress = /^0x[a-fA-F0-9]{40}$/.test(email);
+
+    if (isWalletAddress) {
+      return `${email.slice(0, 6)}...${email.slice(-4)}`;
+    }
+
+    return email;
+  };
+
   const handleGenerateOwnerCredential = async () => {
     if (!address) {
       showAlert({
@@ -263,13 +276,17 @@ export default function VerifiableCredentialsScreen({
 
     try {
       console.log("Generating owner credential...");
-      await credentialService.issueOwnerCredential(
-        lock.id,
-        lock.name,
-        lock.publicKey,
-        lock.privateKey,
-        address
-      );
+      const CredentialRequest = {
+        lockId: lock.id,
+        lockNickname: lock.name,
+        pubk: lock.publicKey,
+        privK: lock.privateKey,
+        userMetaData: {
+          email: address,
+          name: "Lock Owner",
+        },
+      } as CredentialRequest;
+      await issueOwnerCredential(CredentialRequest);
 
       showAlert({
         title: "Success",
@@ -292,12 +309,10 @@ export default function VerifiableCredentialsScreen({
   };
 
   const handleShare = (credential: IssuedCredential) => {
-    // Set QR code expiration to 10 minutes from now
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Share the full W3C credential with QR expiration
     const shareableCredential: QrCodeCredential = {
-      ...credential, // Spread all W3C fields
+      ...credential,
       credentialType: CredentialType.ACCESS,
       qrExpiresAt: expiresAt.toISOString(),
     };
@@ -333,7 +348,7 @@ export default function VerifiableCredentialsScreen({
                 {credential.userMetaData?.name || "Unknown User"}
               </Text>
               <Text style={styles.credentialEmail}>
-                {credential.userMetaData?.email || "No email"}
+                {formatUserIdentifier(credential.userMetaData?.email)}
               </Text>
               <Text style={styles.credentialDate}>
                 Issued: {new Date(credential.validFrom).toLocaleDateString()}

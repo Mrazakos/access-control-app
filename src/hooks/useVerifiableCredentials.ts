@@ -9,6 +9,9 @@ import { VerifiableCredential, UserMetaData } from "../types/types";
 import { environment } from "../config/environment";
 import { LockService } from "../services/LockService";
 import { CredentialService } from "../services/CredentialService";
+import { AccessLevel } from "../enums/accessLevels";
+import { Permissions } from "../enums/permissions";
+import { CredentialType } from "../enums/credentialType";
 
 // Contract configuration - uses environment-based contract address
 const CONTRACT_ADDRESS = (environment.network.contractAddress ||
@@ -17,12 +20,6 @@ const CONTRACT_ADDRESS = (environment.network.contractAddress ||
 console.log(
   `📝 Using contract address: ${CONTRACT_ADDRESS} (${environment.network.chainName})`
 );
-
-// 📋 Credential Types
-export enum CredentialType {
-  ISSUED = "issued", // VCs you issued to others (as lock owner)
-  ACCESS = "access", // VCs others issued to you (for door access)
-}
 
 // 🔐 Extended VerifiableCredential with type classification
 export interface TypedVerifiableCredential extends VerifiableCredential {
@@ -68,6 +65,9 @@ export interface UseVerifiableCredentialsReturn {
 
   // 🏭 ISSUED CREDENTIALS (VCs you issued to others - stores full userMetaData)
   issuedCredentials: IssuedCredential[];
+  issueOwnerCredential: (
+    request: CredentialRequest
+  ) => Promise<IssuedCredential>;
   issueCredential: (request: CredentialRequest) => Promise<IssuedCredential>;
   getIssuedCredentials: () => Promise<IssuedCredential[]>;
   getIssuedCredentialsByLockId: (lockId: number) => Promise<IssuedCredential[]>;
@@ -194,6 +194,43 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
     []
   );
 
+  const issueOwnerCredential = useCallback(
+    async (request: CredentialRequest): Promise<IssuedCredential> => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Use CredentialService to issue and store owner credential
+        const credentialService = CredentialService.getInstance();
+        const credential = await credentialService.issueAndStoreCredential({
+          lockId: request.lockId,
+          lockNickname: request.lockNickname,
+          lockPublicKey: request.pubk,
+          lockPrivateKey: request.privK,
+          userMetaData: request.userMetaData,
+          accessLevel: AccessLevel.ADMIN,
+          permissions: [Permissions.UNLOCK, Permissions.RESET],
+          isOwner: true,
+          validUntil: request.validUntil,
+        });
+
+        // Update state
+        const updatedCredentials =
+          await credentialService.getStoredIssuedCredentials();
+        setIssuedCredentials(updatedCredentials);
+
+        return credential;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to issue credential";
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
   // 🏭 Issue a new credential (stores full userMetaData)
   const issueCredential = useCallback(
     async (request: CredentialRequest): Promise<IssuedCredential> => {
@@ -209,8 +246,8 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
           lockPublicKey: request.pubk,
           lockPrivateKey: request.privK,
           userMetaData: request.userMetaData,
-          accessLevel: "standard", // Default for regular issued credentials
-          permissions: ["unlock"],
+          accessLevel: AccessLevel.STANDARD, // Default for regular issued credentials
+          permissions: [Permissions.UNLOCK],
           validUntil: request.validUntil,
         });
 
@@ -558,6 +595,7 @@ export const useVerifiableCredentials = (): UseVerifiableCredentialsReturn => {
 
     // 🏭 ISSUED CREDENTIALS (VCs you issued to others - stores full userMetaData)
     issuedCredentials,
+    issueOwnerCredential,
     issueCredential,
     getIssuedCredentials,
     getIssuedCredentialsByLockId,
