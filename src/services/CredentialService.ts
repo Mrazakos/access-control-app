@@ -94,7 +94,7 @@ export class CredentialService {
 
       // Determine credential types
       const credentialTypes = ["LockAccessCredential"];
-      if (request.isOwner || accessLevel === AccessLevel.ADMIN) {
+      if (request.isOwner) {
         credentialTypes.push("OwnerCredential");
       }
 
@@ -115,7 +115,7 @@ export class CredentialService {
                     (1000 * 60 * 60 * 24)
                 )
               )
-            : undefined, // No expiration if not specified
+            : undefined,
         }
       );
 
@@ -127,8 +127,7 @@ export class CredentialService {
         id: credentialId,
         credentialType: CredentialType.ISSUED,
         userMetaData: request.userMetaData,
-        isOwner: request.isOwner || false, // Set owner flag
-        // Backward compatibility fields
+        isOwner: request.isOwner || false, 
         lockId: request.lockId,
         lockNickname: request.lockNickname,
       };
@@ -272,15 +271,8 @@ export class CredentialService {
    * Check if a credential is an owner credential
    */
   isOwnerCredential(credential: IssuedCredential): boolean {
-    const subject = Array.isArray(credential.credentialSubject)
-      ? credential.credentialSubject[0]
-      : credential.credentialSubject;
-
-    return (
-      credential.isOwner === true ||
-      (subject.accessLevel === AccessLevel.ADMIN &&
-        (credential.type?.includes("OwnerCredential") || false))
-    );
+    return credential.isOwner === true
+    
   }
 
   /**
