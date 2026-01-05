@@ -17,16 +17,18 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
+import { useAccount } from "wagmi";
 import { useCustomAlert } from "../components/CustomAlert";
 import {
   useVerifiableCredentials,
   CredentialRequest,
   IssuedCredential,
-  CredentialType,
   QrCodeCredential,
 } from "../hooks/useVerifiableCredentials";
 import { Lock } from "../services/LockService";
 import { UserMetaData } from "../types/types";
+import { CredentialService } from "../services/CredentialService";
+import { CredentialType } from "../enums/credentialType";
 
 interface VerifiableCredentialsScreenProps {
   lock: Lock;
@@ -40,13 +42,19 @@ export default function VerifiableCredentialsScreen({
   const {
     issuedCredentials,
     issueCredential,
+    issueOwnerCredential,
     getIssuedCredentialsByLockId,
     isLoading,
     error,
     revokeIssuedCredential,
   } = useVerifiableCredentials();
 
+  const { address } = useAccount();
   const { showAlert, AlertComponent } = useCustomAlert();
+  const credentialService = CredentialService.getInstance();
+
+  // State to track if owner credential exists
+  const [hasOwnerCredential, setHasOwnerCredential] = useState<boolean>(false);
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -122,6 +130,10 @@ export default function VerifiableCredentialsScreen({
       const credentials = await getIssuedCredentialsByLockId(lock.id);
       console.log("✅ Loaded credentials:", credentials.length);
       setLockCredentials(credentials);
+
+      // Check if owner credential exists
+      const ownerExists = await credentialService.hasOwnerCredential(lock.id);
+      setHasOwnerCredential(ownerExists);
     } catch (error) {
       console.error("❌ Error loading credentials:", error);
     }
@@ -238,13 +250,69 @@ export default function VerifiableCredentialsScreen({
     return `${minutes}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const formatUserIdentifier = (email: string | undefined): string => {
+    if (!email) return "No identifier";
+
+    const isWalletAddress = /^0x[a-fA-F0-9]{40}$/.test(email);
+
+    if (isWalletAddress) {
+      return `${email.slice(0, 6)}...${email.slice(-4)}`;
+    }
+
+    return email;
+  };
+
+  const handleGenerateOwnerCredential = async () => {
+    if (!address) {
+      showAlert({
+        title: "Error",
+        message: "Wallet not connected",
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+      return;
+    }
+
+    try {
+      console.log("Generating owner credential...");
+      const CredentialRequest = {
+        lockId: lock.id,
+        lockNickname: lock.name,
+        pubk: lock.publicKey,
+        privK: lock.privateKey,
+        userMetaData: {
+          email: address,
+          name: "Lock Owner",
+        },
+      } as CredentialRequest;
+      await issueOwnerCredential(CredentialRequest);
+
+      showAlert({
+        title: "Success",
+        message: "Owner admin credential created successfully!",
+        icon: "checkmark-circle",
+        iconColor: "#34a853",
+        buttons: [{ text: "OK" }],
+      });
+
+      // Credentials will auto-update through useEffect dependency on issuedCredentials
+    } catch (error) {
+      showAlert({
+        title: "Error",
+        message: `Failed to generate owner credential: ${error}`,
+        icon: "alert-circle",
+        iconColor: "#ea4335",
+        buttons: [{ text: "OK" }],
+      });
+    }
+  };
+
   const handleShare = (credential: IssuedCredential) => {
-    // Set QR code expiration to 10 minutes from now
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Share the full W3C credential with QR expiration
     const shareableCredential: QrCodeCredential = {
-      ...credential, // Spread all W3C fields
+      ...credential,
       credentialType: CredentialType.ACCESS,
       qrExpiresAt: expiresAt.toISOString(),
     };
@@ -256,47 +324,68 @@ export default function VerifiableCredentialsScreen({
     setShowShareModal(true);
   };
 
-  const renderCredentialItem = ({ item: credential }: { item: any }) => (
-    <View style={styles.credentialCard}>
-      <View style={styles.credentialInfo}>
-        <View style={styles.credentialHeader}>
-          <Ionicons name="document-text" size={20} color="#4285f4" />
-          <View style={styles.credentialDetails}>
-            <Text style={styles.credentialName}>
-              {credential.userMetaData?.name || "Unknown User"}
-            </Text>
-            <Text style={styles.credentialEmail}>
-              {credential.userMetaData?.email || "No email"}
-            </Text>
-            <Text style={styles.credentialDate}>
-              Issued: {new Date(credential.validFrom).toLocaleDateString()}
-            </Text>
-            {credential.validUntil && (
-              <Text style={styles.credentialExpiry}>
-                Expires: {new Date(credential.validUntil).toLocaleDateString()}
+  const renderCredentialItem = ({ item: credential }: { item: any }) => {
+    const isOwner = credentialService.isOwnerCredential(credential);
+
+    return (
+      <View
+        style={[styles.credentialCard, isOwner && styles.ownerCredentialCard]}
+      >
+        <View style={styles.credentialInfo}>
+          <View style={styles.credentialHeader}>
+            <Ionicons
+              name={isOwner ? "shield-checkmark" : "document-text"}
+              size={20}
+              color={isOwner ? "#fbbc04" : "#4285f4"}
+            />
+            <View style={styles.credentialDetails}>
+              {isOwner && (
+                <View style={styles.ownerBadge}>
+                  <Text style={styles.ownerBadgeText}>OWNER</Text>
+                </View>
+              )}
+              <Text style={styles.credentialName}>
+                {credential.userMetaData?.name || "Unknown User"}
               </Text>
-            )}
+              <Text style={styles.credentialEmail}>
+                {formatUserIdentifier(credential.userMetaData?.email)}
+              </Text>
+              <Text style={styles.credentialDate}>
+                Issued: {new Date(credential.validFrom).toLocaleDateString()}
+              </Text>
+              {credential.validUntil && (
+                <Text style={styles.credentialExpiry}>
+                  Expires:{" "}
+                  {new Date(credential.validUntil).toLocaleDateString()}
+                </Text>
+              )}
+              {isOwner && (
+                <Text style={styles.ownerAccessLevel}>Access Level: Admin</Text>
+              )}
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.shareButton]}
-          onPress={() => handleShare(credential)}
-        >
-          <Ionicons name="share" size={18} color="#34a853" />
-        </TouchableOpacity>
+        {!isOwner && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.shareButton]}
+              onPress={() => handleShare(credential)}
+            >
+              <Ionicons name="share" size={18} color="#34a853" />
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.revokeButton]}
-          onPress={() => handleRevoke(credential)}
-        >
-          <Ionicons name="close-circle" size={18} color="#ea4335" />
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.revokeButton]}
+              onPress={() => handleRevoke(credential)}
+            >
+              <Ionicons name="close-circle" size={18} color="#ea4335" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderFormModal = () => (
     <Modal
@@ -500,6 +589,19 @@ export default function VerifiableCredentialsScreen({
           <Ionicons name="add" size={20} color="#ffffff" />
           <Text style={styles.addButtonText}>Issue New Credential</Text>
         </TouchableOpacity>
+
+        {/* Generate Owner Credential Button (if not exists) */}
+        {!hasOwnerCredential && (
+          <TouchableOpacity
+            style={styles.generateOwnerButton}
+            onPress={handleGenerateOwnerCredential}
+          >
+            <Ionicons name="shield-checkmark" size={20} color="#fbbc04" />
+            <Text style={styles.generateOwnerButtonText}>
+              Generate Owner Credential
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Credentials List */}
@@ -667,6 +769,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#fbbc04",
     marginTop: 2,
+  },
+  ownerCredentialCard: {
+    borderColor: "#fbbc04",
+    borderWidth: 2,
+    backgroundColor: "rgba(251, 188, 4, 0.05)",
+  },
+  ownerBadge: {
+    backgroundColor: "#fbbc04",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  ownerBadgeText: {
+    color: "#000000",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  ownerAccessLevel: {
+    fontSize: 12,
+    color: "#fbbc04",
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  generateOwnerButton: {
+    backgroundColor: "rgba(251, 188, 4, 0.15)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#fbbc04",
+  },
+  generateOwnerButtonText: {
+    color: "#fbbc04",
+    fontWeight: "600",
+    fontSize: 14,
+    marginLeft: 8,
   },
   actionButtons: {
     flexDirection: "row",

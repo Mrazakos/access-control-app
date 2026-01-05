@@ -278,7 +278,6 @@ export const useLock = (): UseLockReturn => {
         setError(null);
 
         const newLock = await lockService.createLock(request);
-
         // Update local state
         const updatedLocks = await lockService.getStoredLocks();
         setLocks(updatedLocks);

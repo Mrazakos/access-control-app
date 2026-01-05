@@ -23,6 +23,8 @@ import { useLockApi } from "../hooks/useLockApi";
 import { useCall } from "wagmi";
 import { AccessControl } from "../typechain-types";
 import { VerifiableCredential } from "@mrazakos/vc-ecdsa-crypto";
+import { CredentialService } from "../services/CredentialService";
+import environment from "../config/environment";
 
 export default function UnlockScreen() {
   const {
@@ -34,13 +36,13 @@ export default function UnlockScreen() {
     deleteAccessCredential,
     refreshAccessCredentials,
     receiveAccessCredential,
-    getCleanCredential,
   } = useVerifiableCredentials();
   const { showAlert, AlertComponent } = useCustomAlert();
 
+  const credentialService = CredentialService.getInstance();
   // Initialize Lock API hook
   const lockApi = useLockApi({
-    baseUrl: "http://192.168.0.17:3000/api/v1",
+    baseUrl: environment.lockApiBaseUrl,
   });
 
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
@@ -204,7 +206,7 @@ export default function UnlockScreen() {
       );
 
       // 🧹 Get clean W3C credential (removes extra fields that break verification)
-      const cleanCredential = getCleanCredential(credential);
+      const cleanCredential = credentialService.getCleanCredential(credential);
 
       console.log("🧹 Sending clean credential (W3C standard fields only)");
       console.log(
