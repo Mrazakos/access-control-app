@@ -358,6 +358,27 @@ This project implements the [W3C Verifiable Credentials Data Model 2.0](https://
 - [ ] **Audit Logs** - Track all access attempts
 - [ ] **Credential Refresh** - Automatic renewal of expiring credentials
 
+## 🔗 Related Repositories
+
+This project is part of a research paper on decentralized access control systems. The following open-source repositories accompany the paper to ensure full reproducibility of all findings and benchmarks.
+
+### 📊 Benchmarking Suites
+
+| Repository | Description |
+|---|---|
+| [bc-crypto-storage](https://github.com/Mrazakos/bc-crypto-storage) | **On-Chain Gas Profiling** — Hardhat smart contracts and EVM gas evaluation scripts used to benchmark on-chain storage and cryptographic operations. |
+| [vc-ecdsa-crypto](https://github.com/Mrazakos/vc-ecdsa-crypto) | **Off-Chain Edge Emulation** — Custom W3C credentialing suite, mobile issuer metrics, and containerized IoT benchmarking scripts for off-chain performance evaluation. |
+
+### 🏗️ Proof of Concept — Reference Architecture
+
+| Repository | Description |
+|---|---|
+| [access-control-app](https://github.com/Mrazakos/access-control-app) *(this repo)* | **Mobile App** — React Native mobile application implementing blockchain-based access control using W3C Verifiable Credentials and Ethereum smart contracts. |
+| [access-control-lock](https://github.com/Mrazakos/access-control-lock) | **Smart Lock** — Firmware and software for the physical smart lock device acting as the credential verifier in the access control system. |
+| [access-control-contract](https://github.com/Mrazakos/access-control-contract) | **Smart Contract** — Solidity smart contracts for on-chain lock registry and credential revocation, deployed on the Ethereum network. |
+
+---
+
 ## 👤 Author
 
 **Ákos Mráz**
